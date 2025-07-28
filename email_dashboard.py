@@ -35,9 +35,21 @@ if not st.session_state.authenticated:
         st.warning("Incorrect password. Please try again.")
     st.stop()
 
-# === Sidebar ===
+# === Live Dashboard Always Visible ===
+if st.session_state.email_sent_log:
+    with st.expander("📊 Live Dashboard (Always Visible)", expanded=True):
+        df_log = pd.DataFrame(st.session_state.email_sent_log)
+        col1, col2 = st.columns(2)
+        col1.metric("✅ Emails Sent", len(df_log[df_log['status'] == 'Sent']))
+        col2.metric("⚠️ Errors", len(df_log[df_log['status'].str.contains('Error')]))
+
+# === Sidebar Navigation ===
 st.sidebar.title("📂 Navigation")
-nav = st.sidebar.radio("Go to:", ["Upload File", "Prompt File Analysis", "Email Composer", "Dashboard"])
+nav = st.sidebar.radio(
+    "Go to:",
+    ["Email Composer", "Upload File", "Prompt File Analysis", "Dashboard"],
+    index=0
+)
 
 # === Upload Page ===
 if nav == "Upload File":
