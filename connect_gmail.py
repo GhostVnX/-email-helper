@@ -12,16 +12,16 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 def login_to_gmail():
     creds = None
 
-    # Load token if available
+    # Load existing credentials
     if os.path.exists("token.pickle"):
         with open("token.pickle", "rb") as token:
             creds = pickle.load(token)
 
-    # Authenticate if no valid token
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
+            # Google OAuth credentials
             client_secret = {
                 "installed": {
                     "client_id": "19168390529-eou1nme0dfl22tgm4ikdlb2s6gvoodp6.apps.googleusercontent.com",
@@ -30,19 +30,22 @@ def login_to_gmail():
                     "token_uri": "https://oauth2.googleapis.com/token",
                     "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
                     "client_secret": "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",
-                    "redirect_uris": ["https://kugqqnrx8v9tkcwpochazr.streamlit.app"]
+                    "redirect_uris": ["http://localhost"]
                 }
             }
 
-            # Use console method for Streamlit Cloud
-            flow = InstalledAppFlow.from_client_config(client_secret, SCOPES)
-            creds = flow.run_console()
+            try:
+                flow = InstalledAppFlow.from_client_config(client_secret, SCOPES)
+                creds = flow.run_local_server(port=8501)
+            except Exception as e:
+                raise RuntimeError("⚠️ Gmail login failed: " + str(e))
 
-        # Save token for future use
+        # Save token
         with open("token.pickle", "wb") as token:
             pickle.dump(creds, token)
 
     return creds
+
 
 def send_email(creds, to, subject, message_text):
     service = build("gmail", "v1", credentials=creds)
