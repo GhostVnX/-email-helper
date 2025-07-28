@@ -42,7 +42,7 @@ def login_to_gmail():
             )
 
             # ✅ Proper method for Streamlit app (interactive redirect)
-            creds = flow.run_local_server(port=8501)
+           creds = flow.run_local_server(port=8888)
 
         # Save token
         with open("token.pickle", "wb") as token:
