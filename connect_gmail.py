@@ -12,7 +12,7 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 def login_to_gmail():
     creds = None
 
-    # Load existing token
+    # Try to load saved token
     if os.path.exists("token.pickle"):
         with open("token.pickle", "rb") as token:
             creds = pickle.load(token)
@@ -21,7 +21,7 @@ def login_to_gmail():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            # Replace with your credentials
+            # Streamlit-compatible OAuth flow
             client_secret = {
                 "installed": {
                     "client_id": "19168390529-eou1nme0dfl22tgm4ikdlb2s6gvoodp6.apps.googleusercontent.com",
@@ -30,16 +30,17 @@ def login_to_gmail():
                     "token_uri": "https://oauth2.googleapis.com/token",
                     "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
                     "client_secret": "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",
-                    "redirect_uris": ["urn:ietf:wg:oauth:2.0:oob"]
+                    "redirect_uris": ["http://localhost"]
                 }
             }
 
             flow = InstalledAppFlow.from_client_config(client_secret, SCOPES)
-
             auth_url, _ = flow.authorization_url(prompt='consent')
-            st.info("🔐 Please click the link below to authorize Gmail access:")
+
+            st.info("🔐 Step 1: Click the link below to authorize access")
             st.markdown(f"[Authorize Gmail]({auth_url})")
-            code = st.text_input("Paste the authorization code here:")
+
+            code = st.text_input("Step 2: Paste the authorization code here")
 
             if code:
                 try:
@@ -49,12 +50,13 @@ def login_to_gmail():
                         pickle.dump(creds, token)
                     st.success("✅ Gmail authorized successfully!")
                 except Exception as e:
-                    st.error(f"❌ Authorization failed: {e}")
+                    st.error(f"Authorization failed: {e}")
                     return None
             else:
                 st.stop()
 
     return creds
+
 
 def send_email(creds, to, subject, message_text):
     service = build("gmail", "v1", credentials=creds)
