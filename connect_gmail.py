@@ -22,7 +22,7 @@ def login_to_gmail():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            # ✅ OAuth credentials (replace with yours if needed)
+            # ✅ OAuth credentials
             client_secret = {
                 "installed": {
                     "client_id": "19168390529-eou1nme0dfl22tgm4ikdlb2s6gvoodp6.apps.googleusercontent.com",
@@ -41,8 +41,8 @@ def login_to_gmail():
                 redirect_uri="https://kugqqnrx8v9tkcwpochazr.streamlit.app"
             )
 
-            # ✅ Proper method for Streamlit app (interactive redirect)
-           creds = flow.run_local_server(port=8888)
+            # ✅ Fixed indentation here
+            creds = flow.run_local_server(port=8888)
 
         # Save token
         with open("token.pickle", "wb") as token:
