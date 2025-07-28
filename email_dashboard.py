@@ -31,7 +31,6 @@ if not st.session_state.authenticated:
     password = st.text_input("Enter Dashboard Password", type="password")
     if password and password == DASHBOARD_PASSWORD:
         st.session_state.authenticated = True
-        st.experimental_rerun()
     elif password:
         st.warning("Incorrect password. Please try again.")
     st.stop()
