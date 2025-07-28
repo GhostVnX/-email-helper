@@ -1,4 +1,4 @@
-# dashboard.py (Upgraded with Campaign Awareness + Gmail Integration)
+# dashboard.py (Upgraded with Tracking Stats Charts)
 
 import streamlit as st
 import pandas as pd
@@ -7,6 +7,8 @@ from connect_gmail import login_to_gmail, send_email
 from campaign_utils import split_batches, load_campaign_data, save_campaign_data
 from datetime import datetime
 import threading
+import requests
+import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="📧 GhostBot Dashboard", layout="wide")
 
@@ -100,3 +102,40 @@ elif page == "📈 Campaign Tracker":
             st.metric("Sent", len(log))
             st.metric("Pending", len(df) - len(log))
             st.progress(len(log) / len(df))
+
+            # 📈 Engagement Tracking
+            st.write("---")
+            st.write("📊 **Open & Click Stats**")
+            track_url = f"https://your-domain.com/stats?campaign={campaign}"
+            try:
+                res = requests.get(track_url)
+                if res.status_code == 200:
+                    stats = res.json()
+                    st.metric("📬 Opens", stats["opens"])
+                    st.metric("🔗 Clicks", stats["clicks"])
+
+                    # Bar chart: Opens
+                    if stats["open_by_email"]:
+                        st.write("**Open Rate by Email**")
+                        fig1, ax1 = plt.subplots()
+                        ax1.bar(stats["open_by_email"].keys(), stats["open_by_email"].values())
+                        ax1.set_xticklabels(stats["open_by_email"].keys(), rotation=90)
+                        st.pyplot(fig1)
+
+                    # Bar chart: Clicks
+                    if stats["click_by_email"]:
+                        st.write("**Click Rate by Email**")
+                        fig2, ax2 = plt.subplots()
+                        ax2.bar(stats["click_by_email"].keys(), stats["click_by_email"].values(), color="green")
+                        ax2.set_xticklabels(stats["click_by_email"].keys(), rotation=90)
+                        st.pyplot(fig2)
+
+                    # Details
+                    st.write("🕵️‍♂️ Open Events")
+                    st.json(stats["open_details"])
+                    st.write("🧲 Click Events")
+                    st.json(stats["click_details"])
+                else:
+                    st.warning("No tracking data or failed to fetch.")
+            except Exception as e:
+                st.error(f"Tracking error: {e}")
