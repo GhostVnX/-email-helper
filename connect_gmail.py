@@ -11,15 +11,18 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 
 def login_to_gmail():
     creds = None
+
+    # Load token if exists
     if os.path.exists("token.pickle"):
         with open("token.pickle", "rb") as token:
             creds = pickle.load(token)
 
+    # Authenticate if needed
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            # Your Google OAuth client credentials
+            # ✅ OAuth credentials (replace with yours if needed)
             client_secret = {
                 "installed": {
                     "client_id": "19168390529-eou1nme0dfl22tgm4ikdlb2s6gvoodp6.apps.googleusercontent.com",
@@ -32,18 +35,21 @@ def login_to_gmail():
                 }
             }
 
-            # ✅ Redirect URI specifically for your Streamlit app
             flow = InstalledAppFlow.from_client_config(
                 client_secret,
                 SCOPES,
                 redirect_uri="https://kugqqnrx8v9tkcwpochazr.streamlit.app"
             )
-            creds = flow.run_console()
 
+            # ✅ Proper method for Streamlit app (interactive redirect)
+            creds = flow.run_local_server(port=8501)
+
+        # Save token
         with open("token.pickle", "wb") as token:
             pickle.dump(creds, token)
 
     return creds
+
 
 def send_email(creds, to, subject, message_text):
     service = build("gmail", "v1", credentials=creds)
