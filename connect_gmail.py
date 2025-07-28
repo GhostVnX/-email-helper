@@ -20,6 +20,7 @@ def login_to_gmail():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
+            # ✅ Your real credentials here
             client_secret = {
                 "installed": {
                     "client_id": "19168390529-eou1nme0dfl22tgm4ikdlb2s6gvoodp6.apps.googleusercontent.com",
@@ -32,27 +33,26 @@ def login_to_gmail():
                 }
             }
 
-            # Run browserless OAuth for Streamlit
             flow = InstalledAppFlow.from_client_config(client_secret, SCOPES)
             auth_url, _ = flow.authorization_url(prompt='consent')
 
-            st.info("🔐 Step 1: Click the link below to authorize Gmail access.")
-            st.markdown(f"[Click to Authorize]({auth_url})")
+            st.warning("🔑 Click the link below to authorize access to Gmail:")
+            st.markdown(f"[Authorize Gmail Access]({auth_url})")
 
-            code = st.text_input("Step 2: Paste the authorization code here:")
+            code = st.text_input("Paste the authorization code below to continue:")
 
-            if code:
-                try:
-                    flow.fetch_token(code=code)
-                    creds = flow.credentials
-                    with open("token.pickle", "wb") as token:
-                        pickle.dump(creds, token)
-                    st.success("✅ Gmail login successful!")
-                except Exception as e:
-                    st.error(f"❌ Authorization failed: {e}")
-                    return None
-            else:
+            if not code:
                 st.stop()
+
+            try:
+                flow.fetch_token(code=code)
+                creds = flow.credentials
+                with open("token.pickle", "wb") as token:
+                    pickle.dump(creds, token)
+                st.success("✅ Gmail login successful.")
+            except Exception as e:
+                st.error(f"❌ Error fetching token: {e}")
+                return None
 
     return creds
 
