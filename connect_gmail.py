@@ -1,92 +1,92 @@
-import streamlit as st
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from email.mime.text import MIMEText
-import base64
+# connect_gmail.py (Enhanced)
+
+import os
+import pickle
 import time
 import json
-import pickle
-import os
+import base64
+import mimetypes
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+
+LOG_DIR = "logs"
+os.makedirs(LOG_DIR, exist_ok=True)
 
 # Load credentials from Streamlit secrets
-def login_to_gmail():
-    try:
-        # Convert st.secrets section to regular dict
-        secrets_dict = dict(st.secrets["gmail_service"])
 
-        # Authenticate using service account credentials
+def login_to_gmail():
+    import streamlit as st
+    try:
+        secrets_dict = dict(st.secrets["gmail_service"])
         creds = service_account.Credentials.from_service_account_info(
             secrets_dict,
             scopes=["https://www.googleapis.com/auth/gmail.send"]
         )
-
-        # Delegate access to a user in your domain
         delegated_creds = creds.with_subject(secrets_dict["gmail_user"])
         return delegated_creds
-
     except Exception as e:
         raise RuntimeError("Gmail login failed: " + str(e))
 
 
-# Send a single email
-def send_email(creds, to, subject, message_text):
+def create_email(to, subject, message_html, tracking_id=None):
+    message = MIMEMultipart("alternative")
+    message["to"] = to
+    message["subject"] = subject
+
+    if tracking_id:
+        pixel_url = f"https://your-tracking-domain.com/track?tid={tracking_id}"
+        message_html += f'<img src="{pixel_url}" alt="" width="1" height="1">'
+
+    part_html = MIMEText(message_html, "html")
+    message.attach(part_html)
+    return {"raw": base64.urlsafe_b64encode(message.as_bytes()).decode()}
+
+
+def send_email(creds, to, subject, message_html, campaign_name="default"):
     try:
         service = build("gmail", "v1", credentials=creds)
 
-        message = MIMEText(message_text)
-        message["to"] = to
-        message["subject"] = subject
+        log = load_campaign_log(campaign_name)
+        if to in log:
+            return {"status": "duplicate", "message": "Already sent."}
 
-        raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
-        body = {"raw": raw}
+        tracking_id = f"{campaign_name}:{to}".replace("@", "_at_").replace(".", "_")
+        email_data = create_email(to, subject, message_html, tracking_id)
 
-        # Duplicate check
-        sent_log = load_sent_log()
-        if to in sent_log:
-            return {"status": "duplicate", "message": "Already sent to this email."}
+        service.users().messages().send(userId="me", body=email_data).execute()
+        log_sent_email(campaign_name, to)
 
-        # Send
-        service.users().messages().send(userId="me", body=body).execute()
-
-        # Save to log
-        log_sent_email(to)
         return {"status": "success"}
 
     except Exception as e:
-        return {"error": str(e)}
+        return {"status": "error", "error": str(e)}
 
 
-# Send follow-up email
-def send_follow_up(creds, to, subject, message_text, delay_minutes=10):
+def send_follow_up(creds, to, subject, message_html, delay_minutes=10):
     time.sleep(delay_minutes * 60)
-    follow_up_subject = f"Re: {subject}"
-    follow_up_text = f"Just following up on my previous message:\n\n{message_text}"
-    send_email(creds, to, follow_up_subject, follow_up_text)
+    follow_subject = f"Re: {subject}"
+    follow_body = f"Just following up on my last message:<br><br>{message_html}"
+    send_email(creds, to, follow_subject, follow_body)
 
 
-# --- Logging utilities ---
+# Logging utils per campaign
 
-LOG_FILE = "sent_log.pkl"
+def get_log_path(campaign_name):
+    return os.path.join(LOG_DIR, f"{campaign_name}_log.pkl")
 
-def log_sent_email(email):
-    try:
-        if os.path.exists(LOG_FILE):
-            with open(LOG_FILE, "rb") as f:
-                log = pickle.load(f)
-        else:
-            log = set()
-        log.add(email)
-        with open(LOG_FILE, "wb") as f:
-            pickle.dump(log, f)
-    except:
-        pass
 
-def load_sent_log():
-    try:
-        if os.path.exists(LOG_FILE):
-            with open(LOG_FILE, "rb") as f:
-                return pickle.load(f)
-        else:
-            return set()
-    except:
-        return set()
+def log_sent_email(campaign_name, email):
+    log = load_campaign_log(campaign_name)
+    log.add(email)
+    with open(get_log_path(campaign_name), "wb") as f:
+        pickle.dump(log, f)
+
+
+def load_campaign_log(campaign_name):
+    path = get_log_path(campaign_name)
+    if os.path.exists(path):
+        with open(path, "rb") as f:
+            return pickle.load(f)
+    return set()
