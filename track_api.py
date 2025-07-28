@@ -1,6 +1,6 @@
-# track_api.py — Open & Click Tracking Server
+# track_api.py — Open & Click Tracking Server with Stats Endpoint
 
-from flask import Flask, request, send_file, redirect
+from flask import Flask, request, send_file, redirect, jsonify
 import os
 import json
 from datetime import datetime
@@ -52,6 +52,32 @@ def track_click():
         log_event("click", tid)
         return redirect(url)
     return "Invalid request.", 400
+
+
+# 📊 API to return tracking stats
+@app.route("/stats")
+def tracking_stats():
+    campaign = request.args.get("campaign")
+    if not campaign:
+        return jsonify({"error": "campaign query param required"}), 400
+
+    def load_event(event_type):
+        path = os.path.join(TRACK_LOG_DIR, f"{campaign}_{event_type}.json")
+        if os.path.exists(path):
+            with open(path) as f:
+                return json.load(f)
+        return []
+
+    opens = load_event("open")
+    clicks = load_event("click")
+
+    return jsonify({
+        "campaign": campaign,
+        "opens": len(opens),
+        "clicks": len(clicks),
+        "open_details": opens,
+        "click_details": clicks
+    })
 
 
 # Run locally (dev only)
