@@ -57,16 +57,29 @@ if page == "📤 Upload Contacts":
     st.header("📤 Upload Contact File")
     uploaded_file = st.file_uploader("Upload CSV or Excel file", type=["csv", "xlsx"])
     campaign_name = st.text_input("Enter Campaign Name")
-    if uploaded_file and campaign_name:
-        df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith(".csv") else pd.read_excel(uploaded_file)
-        df.columns = [c.lower().strip() for c in df.columns]
-        if "email" not in df.columns:
-            st.error("No 'email' column found.")
-        else:
-            st.session_state.campaigns[campaign_name] = df
-            save_campaign_data(campaign_name, df)
-            st.success(f"Campaign '{campaign_name}' uploaded successfully!")
-            st.dataframe(df.head())
+
+    if uploaded_file:
+        try:
+            df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith(".csv") else pd.read_excel(uploaded_file)
+            df.columns = [c.lower().strip() for c in df.columns]
+            email_columns = [col for col in df.columns if "email" in col]
+
+            if not email_columns:
+                st.error("No email column detected in your file. Please include one (like 'Email' or 'email address').")
+            else:
+                if not campaign_name:
+                    st.info("Please enter a campaign name to proceed.")
+                else:
+                    df.rename(columns={email_columns[0]: "email"}, inplace=True)
+                    df = df.dropna(subset=["email"])
+                    st.session_state.campaigns[campaign_name] = df
+                    save_campaign_data(campaign_name, df)
+                    st.success(f"Campaign '{campaign_name}' uploaded successfully!")
+                    st.dataframe(df.head())
+        except Exception as e:
+            st.error(f"Error reading file: {e}")
+    elif campaign_name:
+        st.info("Waiting for you to upload a file.")
 
 # --- Composer and Preview ---
 elif page == "🧠 Preview & Personalize":
