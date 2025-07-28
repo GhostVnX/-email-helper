@@ -1,11 +1,15 @@
-# track_api.py — Open & Click Tracking Server with Stats Endpoint
+# track_api.py — Open & Click Tracking Server with Stats + CORS Support + Chart Data
 
 from flask import Flask, request, send_file, redirect, jsonify
+from flask_cors import CORS
 import os
 import json
 from datetime import datetime
+from collections import Counter
 
 app = Flask(__name__)
+CORS(app)  # allow cross-origin requests from dashboard
+
 TRACK_LOG_DIR = "logs/tracking"
 os.makedirs(TRACK_LOG_DIR, exist_ok=True)
 
@@ -71,12 +75,19 @@ def tracking_stats():
     opens = load_event("open")
     clicks = load_event("click")
 
+    # Count open and click per email (extracted from tracking ID)
+    def count_by_email(events):
+        ids = [e["id"].split(":")[1] for e in events if ":" in e["id"]]
+        return dict(Counter(ids))
+
     return jsonify({
         "campaign": campaign,
         "opens": len(opens),
         "clicks": len(clicks),
         "open_details": opens,
-        "click_details": clicks
+        "click_details": clicks,
+        "open_by_email": count_by_email(opens),
+        "click_by_email": count_by_email(clicks)
     })
 
 
