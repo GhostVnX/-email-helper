@@ -1,8 +1,7 @@
-# connect_gmail.py
-
 import os
 import pickle
 import base64
+import streamlit as st
 from email.mime.text import MIMEText
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -13,6 +12,7 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 def login_to_gmail():
     creds = None
 
+    # Load existing token
     if os.path.exists("token.pickle"):
         with open("token.pickle", "rb") as token:
             creds = pickle.load(token)
@@ -21,6 +21,7 @@ def login_to_gmail():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
+            # Replace with your credentials
             client_secret = {
                 "installed": {
                     "client_id": "19168390529-eou1nme0dfl22tgm4ikdlb2s6gvoodp6.apps.googleusercontent.com",
@@ -29,21 +30,31 @@ def login_to_gmail():
                     "token_uri": "https://oauth2.googleapis.com/token",
                     "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
                     "client_secret": "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",
-                    "redirect_uris": ["http://localhost"]
+                    "redirect_uris": ["urn:ietf:wg:oauth:2.0:oob"]
                 }
             }
 
-            try:
-                flow = InstalledAppFlow.from_client_config(client_secret, SCOPES)
-                creds = flow.run_local_server(port=0)  # ✅ Automatically finds a free port
-            except Exception as e:
-                raise RuntimeError(f"Gmail login failed: {e}")
+            flow = InstalledAppFlow.from_client_config(client_secret, SCOPES)
 
-        with open("token.pickle", "wb") as token:
-            pickle.dump(creds, token)
+            auth_url, _ = flow.authorization_url(prompt='consent')
+            st.info("🔐 Please click the link below to authorize Gmail access:")
+            st.markdown(f"[Authorize Gmail]({auth_url})")
+            code = st.text_input("Paste the authorization code here:")
+
+            if code:
+                try:
+                    flow.fetch_token(code=code)
+                    creds = flow.credentials
+                    with open("token.pickle", "wb") as token:
+                        pickle.dump(creds, token)
+                    st.success("✅ Gmail authorized successfully!")
+                except Exception as e:
+                    st.error(f"❌ Authorization failed: {e}")
+                    return None
+            else:
+                st.stop()
 
     return creds
-
 
 def send_email(creds, to, subject, message_text):
     service = build("gmail", "v1", credentials=creds)
@@ -51,6 +62,5 @@ def send_email(creds, to, subject, message_text):
     message["to"] = to
     message["subject"] = subject
     raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
-    body = {"raw": raw}
-    sent = service.users().messages().send(userId="me", body=body).execute()
-    return sent
+    send = service.users().messages().send(userId="me", body={"raw": raw}).execute()
+    return send
