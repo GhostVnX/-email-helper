@@ -12,17 +12,16 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 def login_to_gmail():
     creds = None
 
-    # Load token if exists
+    # Load token if available
     if os.path.exists("token.pickle"):
         with open("token.pickle", "rb") as token:
             creds = pickle.load(token)
 
-    # Authenticate if needed
+    # Authenticate if no valid token
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            # ✅ OAuth credentials
             client_secret = {
                 "installed": {
                     "client_id": "19168390529-eou1nme0dfl22tgm4ikdlb2s6gvoodp6.apps.googleusercontent.com",
@@ -35,21 +34,15 @@ def login_to_gmail():
                 }
             }
 
-            flow = InstalledAppFlow.from_client_config(
-                client_secret,
-                SCOPES,
-                redirect_uri="https://kugqqnrx8v9tkcwpochazr.streamlit.app"
-            )
+            # Use console method for Streamlit Cloud
+            flow = InstalledAppFlow.from_client_config(client_secret, SCOPES)
+            creds = flow.run_console()
 
-            # ✅ Fixed indentation here
-            creds = flow.run_local_server(port=8888)
-
-        # Save token
+        # Save token for future use
         with open("token.pickle", "wb") as token:
             pickle.dump(creds, token)
 
     return creds
-
 
 def send_email(creds, to, subject, message_text):
     service = build("gmail", "v1", credentials=creds)
