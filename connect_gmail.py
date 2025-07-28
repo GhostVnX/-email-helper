@@ -1,3 +1,4 @@
+# connect_gmail.py
 import os
 import pickle
 import base64
@@ -12,17 +13,17 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 def login_to_gmail():
     creds = None
 
-    # Load saved token if available
+    # Load token if it exists
     if os.path.exists("token.pickle"):
         with open("token.pickle", "rb") as token:
             creds = pickle.load(token)
 
-    # If no valid credentials, log in
+    # Authenticate if necessary
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            # Paste your Google credentials here (from Google Cloud Console)
+            # Replace with actual Google credentials
             client_secret = {
                 "installed": {
                     "client_id": "19168390529-eou1nme0dfl22tgm4ikdlb2s6gvoodp6.apps.googleusercontent.com",
@@ -34,14 +35,10 @@ def login_to_gmail():
                     "redirect_uris": ["http://localhost"]
                 }
             }
+            flow = InstalledAppFlow.from_client_config(client_secret, SCOPES)
+            creds = flow.run_local_server(port=0)
 
-            flow = InstalledAppFlow.from_client_config(
-                client_secret,
-                SCOPES
-            )
-            creds = flow.run_console()  # Recommended for headless apps like Streamlit Cloud
-
-        # Save token for future use
+        # Save token
         with open("token.pickle", "wb") as token:
             pickle.dump(creds, token)
 
