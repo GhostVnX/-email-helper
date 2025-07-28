@@ -19,7 +19,7 @@ def login_to_gmail():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            # ✅ Your Google OAuth credentials here
+            # Your Google OAuth client credentials
             client_secret = {
                 "installed": {
                     "client_id": "19168390529-eou1nme0dfl22tgm4ikdlb2s6gvoodp6.apps.googleusercontent.com",
@@ -28,10 +28,16 @@ def login_to_gmail():
                     "token_uri": "https://oauth2.googleapis.com/token",
                     "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
                     "client_secret": "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",
-                    "redirect_uris": ["http://localhost"]
+                    "redirect_uris": ["https://kugqqnrx8v9tkcwpochazr.streamlit.app"]
                 }
             }
-            flow = InstalledAppFlow.from_client_config(client_secret, SCOPES)
+
+            # ✅ Redirect URI specifically for your Streamlit app
+            flow = InstalledAppFlow.from_client_config(
+                client_secret,
+                SCOPES,
+                redirect_uri="https://kugqqnrx8v9tkcwpochazr.streamlit.app"
+            )
             creds = flow.run_console()
 
         with open("token.pickle", "wb") as token:
