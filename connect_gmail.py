@@ -3,7 +3,6 @@
 import os
 import pickle
 import base64
-import json
 from email.mime.text import MIMEText
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -14,12 +13,10 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 def login_to_gmail():
     creds = None
 
-    # Load existing token if available
     if os.path.exists("token.pickle"):
         with open("token.pickle", "rb") as token:
             creds = pickle.load(token)
 
-    # If token is invalid, refresh or initiate new flow
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
@@ -36,10 +33,12 @@ def login_to_gmail():
                 }
             }
 
-            flow = InstalledAppFlow.from_client_config(client_secret, SCOPES)
-            creds = flow.run_local_server(port=0)
+            try:
+                flow = InstalledAppFlow.from_client_config(client_secret, SCOPES)
+                creds = flow.run_local_server(port=0)  # ✅ Automatically finds a free port
+            except Exception as e:
+                raise RuntimeError(f"Gmail login failed: {e}")
 
-        # Save token
         with open("token.pickle", "wb") as token:
             pickle.dump(creds, token)
 
