@@ -1,5 +1,3 @@
-# dashboard.py (Enhanced with AI Suggestions, Export, Auto-Schedule)
-
 import streamlit as st
 import pandas as pd
 import os
@@ -9,7 +7,7 @@ from datetime import datetime, timedelta
 import threading
 import requests
 import matplotlib.pyplot as plt
-import openai
+import time
 
 st.set_page_config(page_title="📧 GhostBot Dashboard", layout="wide")
 
@@ -59,20 +57,6 @@ elif page == "🧠 Preview & Personalize":
         campaign = st.selectbox("Select Campaign", list(st.session_state.campaigns))
         df = st.session_state.campaigns[campaign].copy()
 
-        # AI Keyword Suggestion (Optional)
-        if st.button("💡 Suggest Filter Topics"):
-            try:
-                openai.api_key = os.getenv("OPENAI_API_KEY")
-                response = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
-                    messages=[{"role": "system", "content": "Suggest email list filters based on music or niche audience"},
-                              {"role": "user", "content": str(df.head(50))}]
-                )
-                suggestions = response.choices[0].message.content
-                st.info(f"Suggested Filters: {suggestions}")
-            except Exception as e:
-                st.error(f"OpenAI Error: {e}")
-
         prompt_keywords = st.text_area("Prompt: What do you want to find? (e.g. hiphop curators, afrobeat emails)")
         matched = df.copy()
         if prompt_keywords:
@@ -90,7 +74,6 @@ elif page == "🧠 Preview & Personalize":
         matched["preview"] = matched.apply(lambda row: body.replace("{name}", row.get("name", "there")), axis=1)
         st.dataframe(matched[[col for col in matched.columns if "email" in col] + ["preview"]])
 
-        # Export as CSV Option
         if st.download_button("📤 Download Filtered CSV", data=matched.to_csv(index=False).encode(), file_name="filtered_campaign.csv"):
             st.success("Filtered CSV downloaded.")
 
@@ -116,9 +99,9 @@ elif page == "✉️ Send Emails":
 
         if send_button:
             df = st.session_state.campaigns[campaign]
-            sent_count = 0
+            failed_log = []
 
-            def send_batch(start_index):
+            def send_batch(start_index, sent_counter):
                 batch = df.iloc[start_index:start_index+100]
                 for _, row in batch.iterrows():
                     email = row.get("email")
@@ -126,21 +109,32 @@ elif page == "✉️ Send Emails":
                     html_body = body.replace("{name}", name)
                     result = send_email(creds, email, subject, html_body, campaign)
                     if result.get("status") == "success":
-                        nonlocal sent_count
-                        sent_count += 1
-                    st.write(f"{email} → {result.get('status')}")
+                        sent_counter["count"] += 1
+                    elif "error" in result:
+                        failed_log.append({"email": email, "error": result["error"]})
+                    st.write(f"{email} → {result.get('status') or result.get('error')}")
 
-            if auto_batch:
+            sent_counter = {"count": 0}
+            total = len(df)
+
+            if auto_batch or total > 1000:
                 start_idx = 0
-                while start_idx < len(df):
-                    send_batch(start_idx)
+                while start_idx < total:
+                    send_batch(start_idx, sent_counter)
                     start_idx += 100
-                    st.info(f"Batch complete: {start_idx} emails. Waiting until next day.")
-                    time.sleep(86400)  # Delay for next batch
+                    if start_idx < total:
+                        st.info(f"Batch complete: {start_idx}/{total} emails sent. Waiting until next day.")
+                        time.sleep(86400)
             else:
-                send_batch(0)
+                send_batch(0, sent_counter)
 
-            st.success(f"✅ {sent_count} emails sent in '{campaign}'")
+            st.success(f"✅ {sent_counter['count']} emails sent in '{campaign}'")
+            if failed_log:
+                st.error("Some emails failed to send:")
+                st.json(failed_log)
+                fail_df = pd.DataFrame(failed_log)
+                fail_df.to_csv(f"failed_{campaign}.csv", index=False)
+                st.download_button("⬇️ Download Failed Emails", fail_df.to_csv(index=False).encode(), file_name=f"failed_{campaign}.csv")
 
 # --- Campaign Tracker ---
 elif page == "📈 Campaign Tracker":
@@ -156,36 +150,3 @@ elif page == "📈 Campaign Tracker":
             st.metric("Sent", len(log))
             st.metric("Pending", len(df) - len(log))
             st.progress(len(log) / len(df))
-
-            st.write("---")
-            st.write("📊 **Open & Click Stats**")
-            track_url = f"https://your-domain.com/stats?campaign={campaign}"
-            try:
-                res = requests.get(track_url)
-                if res.status_code == 200:
-                    stats = res.json()
-                    st.metric("📬 Opens", stats["opens"])
-                    st.metric("🔗 Clicks", stats["clicks"])
-
-                    if stats["open_by_email"]:
-                        st.write("**Open Rate by Email**")
-                        fig1, ax1 = plt.subplots()
-                        ax1.bar(stats["open_by_email"].keys(), stats["open_by_email"].values())
-                        ax1.set_xticklabels(stats["open_by_email"].keys(), rotation=90)
-                        st.pyplot(fig1)
-
-                    if stats["click_by_email"]:
-                        st.write("**Click Rate by Email**")
-                        fig2, ax2 = plt.subplots()
-                        ax2.bar(stats["click_by_email"].keys(), stats["click_by_email"].values(), color="green")
-                        ax2.set_xticklabels(stats["click_by_email"].keys(), rotation=90)
-                        st.pyplot(fig2)
-
-                    st.write("🕵️‍♂️ Open Events")
-                    st.json(stats["open_details"])
-                    st.write("🧲 Click Events")
-                    st.json(stats["click_details"])
-                else:
-                    st.warning("No tracking data or failed to fetch.")
-            except Exception as e:
-                st.error(f"Tracking error: {e}")
