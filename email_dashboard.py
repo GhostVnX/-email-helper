@@ -1,138 +1,102 @@
-# email_dashboard.py (Enhanced)
+# dashboard.py (Upgraded with Campaign Awareness + Gmail Integration)
+
 import streamlit as st
 import pandas as pd
-from connect_gmail import login_to_gmail, send_email, send_follow_up
-import time
-import io
-import matplotlib.pyplot as plt
+import os
+from connect_gmail import login_to_gmail, send_email
+from campaign_utils import split_batches, load_campaign_data, save_campaign_data
+from datetime import datetime
+import threading
 
-st.set_page_config(page_title="Email Helper Dashboard", layout="wide")
+st.set_page_config(page_title="📧 GhostBot Dashboard", layout="wide")
 
 # --- Auth ---
+DASHBOARD_PASSWORD = "GhostAccess123"
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
-
-DASHBOARD_PASSWORD = "GhostAccess123"
-
 if not st.session_state.authenticated:
-    st.title("🔒 Email Helper Login")
-    password = st.text_input("Enter Dashboard Password", type="password")
-    if password.strip() == DASHBOARD_PASSWORD:
+    st.title("🔐 GhostBot Login")
+    password = st.text_input("Enter password", type="password")
+    if password == DASHBOARD_PASSWORD:
         st.session_state.authenticated = True
         st.rerun()
     elif password:
-        st.warning("Incorrect password. Please try again.")
+        st.warning("Incorrect password")
     st.stop()
 
-# --- Session State Defaults ---
-if "data" not in st.session_state:
-    st.session_state.data = None
-if "filtered" not in st.session_state:
-    st.session_state.filtered = None
-
 # --- Navigation ---
-st.sidebar.title("📍 Navigation")
-nav = st.sidebar.radio("Go to", ["📤 Upload File", "🧠 Prompt File Analysis", "✉️ Email Composer", "📊 Campaign Dashboard"])
+st.sidebar.title("GhostBot Navigation")
+page = st.sidebar.radio("Go to", ["📤 Upload Contacts", "🧠 Preview & Personalize", "✉️ Send Emails", "📈 Campaign Tracker"])
 
-# --- Upload File ---
-if nav == "📤 Upload File":
-    st.header("📤 Upload Your Contact File")
-    uploaded_file = st.file_uploader("Upload a CSV or Excel file", type=["csv", "xlsx"])
-    if uploaded_file:
-        try:
-            if uploaded_file.name.endswith(".csv"):
-                df = pd.read_csv(uploaded_file)
-            else:
-                df = pd.read_excel(uploaded_file)
-            st.session_state.data = df
-            st.success("✅ File uploaded successfully")
+if "campaigns" not in st.session_state:
+    st.session_state.campaigns = {}
 
-            # Preview and Summary
-            st.subheader("📌 File Summary")
-            st.dataframe(df.head())
-            st.write(f"**Rows:** {df.shape[0]}, **Columns:** {df.shape[1]}")
-            st.bar_chart(df.notna().sum())
-        except Exception as e:
-            st.error(f"Error loading file: {e}")
-
-# --- Prompt Page ---
-elif nav == "🧠 Prompt File Analysis":
-    st.header("🔎 Prompt-Based File Filter")
-    if st.session_state.data is not None:
-        prompt = st.text_area("Enter your filter prompt (e.g. 'Find high engagement emails')")
-        if st.button("Apply Prompt"):
-            df = st.session_state.data
-            extracted = df.copy()
-
-            # Auto-detect email columns for demo purposes
-            email_cols = [col for col in df.columns if "email" in col.lower()]
-            if email_cols:
-                extracted = df[email_cols + [col for col in df.columns if "name" in col.lower() or "handle" in col.lower()]]
-                st.session_state.filtered = extracted.dropna()
-                st.success("✅ Data filtered with prompt")
-
-                # Visual Summary
-                st.subheader("📊 Filtered Data Overview")
-                st.metric("Contacts Found", len(st.session_state.filtered))
-                st.dataframe(st.session_state.filtered.head())
-            else:
-                st.warning("No email-like column detected.")
-    else:
-        st.info("📁 Please upload data file first.")
-
-# --- Email Composer ---
-elif nav == "✉️ Email Composer":
-    st.header("✉️ Compose & Send Emails")
-    df = st.session_state.filtered if st.session_state.filtered is not None else None
-    if df is not None:
-        credentials = login_to_gmail()
-        if credentials:
-            subject = st.text_input("Email Subject")
-            message_template = st.text_area("Email Body (use {name} for personalization)")
-            follow_up_toggle = st.checkbox("Send follow-up email after 10 minutes if no reply")
-            send_btn = st.button("🚀 Send Emails")
-
-            if send_btn:
-                for i, row in df.iterrows():
-                    name = row.get("Name", "")
-                    email = row.get("Email") or row.get("email")
-                    if email:
-                        message = message_template.replace("{name}", name)
-                        result = send_email(credentials, email, subject, message)
-                        if isinstance(result, dict) and result.get("status") == "duplicate":
-                            st.warning(f"⚠️ {result['message']}")
-                        elif "error" in result:
-                            st.error(f"❌ Failed to send to {email}: {result['error']}")
-                        else:
-                            st.success(f"✅ Sent to {email}")
-
-                            if follow_up_toggle:
-                                # Trigger follow-up email in background thread
-                                import threading
-                                threading.Thread(target=send_follow_up, args=(credentials, email, subject, message, 10)).start()
-                        time.sleep(1)
+# --- Upload Contacts ---
+if page == "📤 Upload Contacts":
+    st.title("📤 Upload Contact File")
+    uploaded_file = st.file_uploader("Upload CSV or Excel", type=["csv", "xlsx"])
+    campaign_name = st.text_input("Campaign Name (unique)")
+    if uploaded_file and campaign_name:
+        df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith(".csv") else pd.read_excel(uploaded_file)
+        df.columns = [c.lower().strip() for c in df.columns]
+        if "email" not in df.columns:
+            st.error("No 'email' column found.")
         else:
-            st.error("Gmail authentication failed.")
-    else:
-        st.info("📌 Please filter data before sending.")
+            st.session_state.campaigns[campaign_name] = df
+            save_campaign_data(campaign_name, df)
+            st.success(f"Campaign '{campaign_name}' uploaded successfully!")
+            st.dataframe(df.head())
 
-# --- Dashboard ---
-elif nav == "📊 Campaign Dashboard":
-    st.header("📊 Campaign Overview")
-    if st.session_state.filtered is not None:
-        df = st.session_state.filtered
-        st.metric("Total Contacts", len(df))
-        emails_sent = 0
-        from connect_gmail import load_sent_log
-        sent_log = load_sent_log()
-        for contact in df["Email"] if "Email" in df.columns else df["email"]:
-            if contact in sent_log:
-                emails_sent += 1
-        st.metric("Emails Sent", emails_sent)
-        st.metric("Pending Emails", len(df) - emails_sent)
-        st.dataframe(df)
-
-        st.subheader("📁 Sent Log")
-        st.json(sent_log)
+# --- Preview ---
+elif page == "🧠 Preview & Personalize":
+    st.title("🧠 Email Preview")
+    if not st.session_state.campaigns:
+        st.info("Upload a contact list first.")
     else:
-        st.info("📌 Upload and process data to track campaigns.")
+        campaign = st.selectbox("Select Campaign", list(st.session_state.campaigns))
+        subject = st.text_input("Subject")
+        body = st.text_area("Body with {name} placeholder")
+        df = st.session_state.campaigns[campaign].copy()
+        df["preview"] = df.apply(lambda row: body.replace("{name}", row.get("name", "there")), axis=1)
+        st.dataframe(df[["email", "preview"]])
+
+# --- Send Emails ---
+elif page == "✉️ Send Emails":
+    st.title("✉️ Send Emails")
+    if not st.session_state.campaigns:
+        st.warning("Upload a contact list first.")
+    else:
+        campaign = st.selectbox("Select Campaign to Send", list(st.session_state.campaigns))
+        creds = login_to_gmail()
+        subject = st.text_input("Subject")
+        body = st.text_area("Email Body (HTML supported)")
+        followup = st.checkbox("Enable Follow-Up After 10 Minutes")
+        send_button = st.button("🚀 Start Sending")
+
+        if send_button:
+            df = st.session_state.campaigns[campaign]
+            sent_count = 0
+            for _, row in df.iterrows():
+                email = row.get("email")
+                name = row.get("name", "there")
+                html_body = body.replace("{name}", name)
+                result = send_email(creds, email, subject, html_body, campaign)
+                if result.get("status") == "success":
+                    sent_count += 1
+                st.write(f"{email} → {result.get('status')}")
+            st.success(f"✅ {sent_count} emails sent in '{campaign}'")
+
+# --- Campaign Tracker ---
+elif page == "📈 Campaign Tracker":
+    st.title("📈 Campaign Dashboard")
+    if not st.session_state.campaigns:
+        st.info("No campaigns loaded.")
+    else:
+        for campaign, df in st.session_state.campaigns.items():
+            st.subheader(f"📦 {campaign}")
+            from connect_gmail import load_campaign_log
+            log = load_campaign_log(campaign)
+            st.metric("Contacts", len(df))
+            st.metric("Sent", len(log))
+            st.metric("Pending", len(df) - len(log))
+            st.progress(len(log) / len(df))
