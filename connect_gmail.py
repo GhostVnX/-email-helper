@@ -1,3 +1,4 @@
+# connect_gmail.py
 import os
 import pickle
 import base64
@@ -11,7 +12,6 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 
 def login_to_gmail():
     creds = None
-
     if os.path.exists("token.pickle"):
         with open("token.pickle", "rb") as token:
             creds = pickle.load(token)
@@ -20,7 +20,6 @@ def login_to_gmail():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            # ✅ Your real credentials here
             client_secret = {
                 "installed": {
                     "client_id": "19168390529-eou1nme0dfl22tgm4ikdlb2s6gvoodp6.apps.googleusercontent.com",
@@ -36,11 +35,10 @@ def login_to_gmail():
             flow = InstalledAppFlow.from_client_config(client_secret, SCOPES)
             auth_url, _ = flow.authorization_url(prompt='consent')
 
-            st.warning("🔑 Click the link below to authorize access to Gmail:")
-            st.markdown(f"[Authorize Gmail Access]({auth_url})")
+            st.warning("🔑 Click below to authorize Gmail and paste the code.")
+            st.markdown(f"[👉 Open Authorization URL]({auth_url})")
 
-            code = st.text_input("Paste the authorization code below to continue:")
-
+            code = st.text_input("Paste Authorization Code Here")
             if not code:
                 st.stop()
 
@@ -49,9 +47,9 @@ def login_to_gmail():
                 creds = flow.credentials
                 with open("token.pickle", "wb") as token:
                     pickle.dump(creds, token)
-                st.success("✅ Gmail login successful.")
+                st.success("✅ Gmail authenticated!")
             except Exception as e:
-                st.error(f"❌ Error fetching token: {e}")
+                st.error(f"❌ Auth failed: {e}")
                 return None
 
     return creds
