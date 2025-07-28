@@ -1,130 +1,124 @@
-# Phase 2, 2.1, 2.2 Streamlit App — Full Functional Code
-# Author: Ghost VnX x GPT
-
+# email_dashboard.py
 import streamlit as st
 import pandas as pd
-import os
-from datetime import datetime, timedelta
 from connect_gmail import login_to_gmail, send_email
+import time
+import os
 
-st.set_page_config(page_title="Email Helper", layout="wide")
+# Set up Streamlit page config
+st.set_page_config(page_title="Email Helper Dashboard", layout="centered")
 
-# === App State ===
-if 'authenticated' not in st.session_state:
+# Dashboard Auth
+DASHBOARD_PASSWORD = "ghostvnx123"
+
+if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
-if 'uploaded_file' not in st.session_state:
-    st.session_state.uploaded_file = None
-if 'data' not in st.session_state:
-    st.session_state.data = None
-if 'prompt' not in st.session_state:
-    st.session_state.prompt = ""
-if 'custom_message' not in st.session_state:
-    st.session_state.custom_message = ""
-if 'email_sent_log' not in st.session_state:
-    st.session_state.email_sent_log = []
-
-# === Login Section ===
-st.title("📧 Email Helper by Ghost VnX")
-DASHBOARD_PASSWORD = "GhostAccess123"
 
 if not st.session_state.authenticated:
+    st.title("🔒 Email Helper Login")
     password = st.text_input("Enter Dashboard Password", type="password")
-    if password and password == DASHBOARD_PASSWORD:
+    if password == DASHBOARD_PASSWORD:
         st.session_state.authenticated = True
+        st.experimental_rerun()
     elif password:
-        st.warning("Incorrect password. Please try again.")
+        st.warning("Incorrect password.")
     st.stop()
 
-# === Live Dashboard Always Visible ===
-if st.session_state.email_sent_log:
-    with st.expander("📊 Live Dashboard (Always Visible)", expanded=True):
-        df_log = pd.DataFrame(st.session_state.email_sent_log)
-        col1, col2 = st.columns(2)
-        col1.metric("✅ Emails Sent", len(df_log[df_log['status'] == 'Sent']))
-        col2.metric("⚠️ Errors", len(df_log[df_log['status'].str.contains('Error')]))
+# Navigation
+st.sidebar.title("📍 Navigation")
+nav = st.sidebar.radio("Go to", ["📤 Upload File", "🧠 Process Data", "✍️ Email Composer", "📊 Dashboard", "🔚 Logout"])
 
-# === Sidebar Navigation ===
-st.sidebar.title("📂 Navigation")
-nav = st.sidebar.radio(
-    "Go to:",
-    ["Email Composer", "Upload File", "Prompt File Analysis", "Dashboard"],
-    index=0
-)
+# Global session state for data
+if "data" not in st.session_state:
+    st.session_state.data = None
+if "sent_log" not in st.session_state:
+    st.session_state.sent_log = []
 
-# === Upload Page ===
-if nav == "Upload File":
-    st.header("📁 Upload Your Contact File")
-    uploaded = st.file_uploader("Upload .csv, .xlsx, or .txt file", type=["csv", "xlsx", "txt"])
-    if uploaded:
-        if uploaded.name.endswith("csv"):
-            df = pd.read_csv(uploaded)
-        elif uploaded.name.endswith("xlsx"):
-            df = pd.read_excel(uploaded)
-        elif uploaded.name.endswith("txt"):
-            df = pd.read_csv(uploaded, delimiter="\t")
-        else:
-            st.error("Unsupported file format")
-            st.stop()
+# Page 1: Upload File
+if nav == "📤 Upload File":
+    st.title("📤 Upload Your File")
+    uploaded_file = st.file_uploader("Upload CSV or Excel", type=["csv", "xlsx"])
+    if uploaded_file:
+        try:
+            if uploaded_file.name.endswith(".csv"):
+                df = pd.read_csv(uploaded_file)
+            else:
+                df = pd.read_excel(uploaded_file)
+            st.session_state.data = df
+            st.success("✅ File uploaded and read successfully.")
+            st.dataframe(df.head())
+        except Exception as e:
+            st.error(f"❌ Failed to process file: {e}")
 
-        st.session_state.uploaded_file = uploaded
-        st.session_state.data = df
-        st.success("✅ File uploaded and previewed below")
-        st.dataframe(df.head())
-
-# === Prompt Page ===
-elif nav == "Prompt File Analysis":
-    st.header("🔎 Prompt-Based File Filter")
+# Page 2: Process Data
+elif nav == "🧠 Process Data":
+    st.title("🧠 Process & Filter Data")
     if st.session_state.data is not None:
-        prompt = st.text_area("Enter your filter prompt (e.g. 'Find hip hop curators in UK')")
-        if st.button("Apply Prompt"):
-            # Simulated: real AI filtering logic to come
-            st.session_state.prompt = prompt
-            st.info(f"Prompt applied: {prompt}")
-            st.dataframe(st.session_state.data.head())
-    else:
-        st.warning("Please upload a file first")
+        df = st.session_state.data.copy()
 
-# === Composer Page ===
-elif nav == "Email Composer":
+        prompt = st.text_area("Enter prompt for what to extract (e.g., valid emails, names):")
+        if st.button("Run Prompt Filter"):
+            if "Contact" in df.columns:
+                df = df.dropna(subset=["Contact"])
+                df = df[df["Contact"].str.contains("@")]
+                st.session_state.data = df
+                st.success(f"Filtered {len(df)} email entries.")
+                st.dataframe(df)
+            else:
+                st.warning("Column `Contact` not found.")
+    else:
+        st.warning("Please upload a file first.")
+
+# Page 3: Compose Email
+elif nav == "✍️ Email Composer":
     st.header("✍️ Compose Email & Send")
     if st.session_state.data is not None:
         credentials = login_to_gmail()
         if credentials:
-            message_template = st.text_area("Type your base message here. Use [Name] and [Platform] for personalization.", height=150)
-            attachment = st.file_uploader("Optional: Upload attachment to include in email")
-            send_button = st.button("Send Emails")
+            message_template = st.text_area("Type your base message here", height=200)
+            subject = st.text_input("Subject of Email")
+            attachment = st.file_uploader("Optional: Upload attachment", type=None)
 
-            if send_button:
-                sent_log = []
-                for index, row in st.session_state.data.iterrows():
-                    to = row.get("Contact") or row.get("Email")
-                    if pd.isna(to):
-                        continue
-                    name = row.get("Title", "")
-                    platform = row.get("Platform", "")
-                    message = message_template.replace("[Name]", name).replace("[Platform]", platform)
+            limit = st.slider("Max emails to send this run", min_value=1, max_value=50, value=10)
 
+            if st.button("🚀 Send Emails"):
+                df = st.session_state.data
+                df = df.dropna(subset=["Contact"])
+                success, failed = 0, 0
+                for idx, row in df.head(limit).iterrows():
                     try:
-                        send_result = send_email(credentials, to, "Ghost VnX Submission", message)
-                        sent_log.append({"to": to, "status": "Sent", "timestamp": datetime.now().isoformat()})
+                        email = row["Contact"]
+                        name = row["Name"] if "Name" in row else ""
+                        personalized = message_template.replace("{name}", name)
+                        send_email(credentials, email, subject, personalized)
+                        st.session_state.sent_log.append({
+                            "to": email,
+                            "status": "Sent",
+                            "timestamp": time.ctime()
+                        })
+                        success += 1
+                        time.sleep(2)  # Avoid hitting Gmail API limits
                     except Exception as e:
-                        sent_log.append({"to": to, "status": f"Error: {e}", "timestamp": datetime.now().isoformat()})
-
-                st.session_state.email_sent_log.extend(sent_log)
-                st.success("✅ Emails sent (or attempted). Check dashboard tab.")
-        else:
-            st.warning("Gmail login required.")
+                        st.session_state.sent_log.append({
+                            "to": row.get("Contact", "N/A"),
+                            "status": f"Failed: {e}",
+                            "timestamp": time.ctime()
+                        })
+                        failed += 1
+                st.success(f"✅ Emails sent: {success}, Failed: {failed}")
     else:
-        st.warning("Please upload and analyze file first")
+        st.warning("Please upload and filter your file first.")
 
-# === Dashboard Page ===
-elif nav == "Dashboard":
-    st.header("📊 Campaign Dashboard")
-    if st.session_state.email_sent_log:
-        df_log = pd.DataFrame(st.session_state.email_sent_log)
-        st.metric("Emails Sent", len(df_log[df_log['status'] == 'Sent']))
-        st.metric("Errors", len(df_log[df_log['status'].str.contains('Error')]))
-        st.dataframe(df_log.tail(20))
-        st.download_button("Download Full Log", df_log.to_csv(index=False), file_name="email_log.csv")
+# Page 4: Dashboard
+elif nav == "📊 Dashboard":
+    st.title("📊 Campaign Dashboard")
+    if st.session_state.sent_log:
+        st.write(f"📨 Total emails processed: {len(st.session_state.sent_log)}")
+        st.dataframe(pd.DataFrame(st.session_state.sent_log))
     else:
-        st.info("No email activity logged yet.")
+        st.info("No emails sent yet. Once you send emails, logs will show here.")
+
+# Page 5: Logout
+elif nav == "🔚 Logout":
+    st.session_state.authenticated = False
+    st.experimental_rerun()
