@@ -1,15 +1,28 @@
+# dashboard.py (Includes Reply Detection + Campaign Reports Setup)
+
 import streamlit as st
 import pandas as pd
 import os
-from connect_gmail import login_to_gmail, send_email
+from connect_gmail import login_to_gmail, send_email, load_campaign_log, check_reply_status
 from campaign_utils import split_batches, load_campaign_data, save_campaign_data
 from datetime import datetime, timedelta
 import threading
-import requests
 import matplotlib.pyplot as plt
 import time
 
-st.set_page_config(page_title="📧 GhostBot Dashboard", layout="wide")
+st.set_page_config(page_title="📧 GhostBot Dashboard", layout="wide", initial_sidebar_state="expanded")
+
+# --- Dark Theme & CSS ---
+st.markdown("""
+    <style>
+        .stApp { background-color: #111827; color: #e5e7eb; }
+        h1, h2, h3, h4 { color: #93c5fd; }
+        .sidebar .sidebar-content { background-color: #1f2937; }
+        .stButton>button { background-color: #2563eb; color: white; font-weight: bold; }
+        .stMetric-value { color: #60a5fa !important; }
+        .sticky-box { position: sticky; top: 0; background: #1f2937; padding: 1em; margin-bottom: 1em; border: 1px solid #374151; border-radius: 8px; }
+    </style>
+""", unsafe_allow_html=True)
 
 # --- Auth ---
 DASHBOARD_PASSWORD = "GhostAccess123"
@@ -26,127 +39,88 @@ if not st.session_state.authenticated:
     st.stop()
 
 # --- Navigation ---
-st.sidebar.title("GhostBot Navigation")
-page = st.sidebar.radio("Go to", ["📤 Upload Contacts", "🧠 Preview & Personalize", "✉️ Send Emails", "📈 Campaign Tracker"])
+st.sidebar.title("👻 GhostBot Navigation")
+page = st.sidebar.radio("📍 Choose a section", ["📤 Upload Contacts", "🧠 Preview & Personalize", "✉️ Send Emails", "📈 Campaign Tracker"])
 
 if "campaigns" not in st.session_state:
     st.session_state.campaigns = {}
 
-# --- Upload Contacts ---
-if page == "📤 Upload Contacts":
-    st.title("📤 Upload Contact File")
-    uploaded_file = st.file_uploader("Upload CSV or Excel", type=["csv", "xlsx"])
-    campaign_name = st.text_input("Campaign Name (unique)")
-    if uploaded_file and campaign_name:
-        df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith(".csv") else pd.read_excel(uploaded_file)
-        df.columns = [c.lower().strip() for c in df.columns]
-        if not any("email" in col for col in df.columns):
-            st.error("No column containing the word 'email' found.")
-        else:
-            st.session_state.campaigns[campaign_name] = df
-            save_campaign_data(campaign_name, df)
-            st.success(f"Campaign '{campaign_name}' uploaded successfully!")
-            st.dataframe(df.head())
+FOLLOW_UP_DELAY_DAYS = 3
 
-# --- Preview ---
-elif page == "🧠 Preview & Personalize":
-    st.title("🧠 Email Preview, Filtering & Save-As-Campaign")
-    if not st.session_state.campaigns:
-        st.info("Upload a contact list first.")
-    else:
-        campaign = st.selectbox("Select Campaign", list(st.session_state.campaigns))
-        df = st.session_state.campaigns[campaign].copy()
+REPLY_PROMPTS = {
+    "Formal": "Thank you for your time. I'm following up on our previous message.",
+    "Gen Z": "Hey hey! Just circling back on this 😎",
+    "Hype": "🔥 Big opportunity alert – let’s not miss it!",
+    "Chill": "Hey – wanted to check in casually. No pressure."
+}
 
-        prompt_keywords = st.text_area("Prompt: What do you want to find? (e.g. hiphop curators, afrobeat emails)")
-        matched = df.copy()
-        if prompt_keywords:
-            keywords = [k.strip().lower() for k in prompt_keywords.split(",") if k.strip()]
-            matched = df[df.apply(lambda row: any(k in str(row).lower() for k in keywords), axis=1)]
+if page == "🧠 Preview & Personalize":
+    st.header("🧠 Compose and Preview Emails")
+    tone = st.radio("Select Tone Style", list(REPLY_PROMPTS.keys()), horizontal=True)
+    if tone:
+        st.code(REPLY_PROMPTS[tone], language="text")
+    st.markdown("---")
 
-        if st.checkbox("Only rows with emails"):
-            matched = matched[matched.apply(lambda row: any("@" in str(val) for val in row if isinstance(val, str)), axis=1)]
+# --- Daily Batching Trigger ---
+def auto_batch_send(campaign_name, df, subject, body, creds):
+    log = load_campaign_log(campaign_name)
+    already_sent = set([entry[0] for entry in log])
+    failed_emails = set()
+    failed_path = f"failed_{campaign_name}.csv"
 
-        sample_n = st.slider("Limit preview rows", 1, len(matched), min(50, len(matched))) if len(matched) > 50 else len(matched)
-        matched = matched.head(sample_n)
+    if os.path.exists(failed_path):
+        failed_emails.update(pd.read_csv(failed_path)['email'].tolist())
 
-        subject = st.text_input("Subject")
-        body = st.text_area("Body with {name} placeholder")
-        matched["preview"] = matched.apply(lambda row: body.replace("{name}", row.get("name", "there")), axis=1)
-        st.dataframe(matched[[col for col in matched.columns if "email" in col] + ["preview"]])
+    global_sent = set()
+    for all_logs in os.listdir():
+        if all_logs.startswith("log_") and all_logs.endswith(".csv"):
+            try:
+                sent_log_df = pd.read_csv(all_logs)
+                global_sent.update(sent_log_df['email'].dropna().tolist())
+            except:
+                pass
 
-        if st.download_button("📤 Download Filtered CSV", data=matched.to_csv(index=False).encode(), file_name="filtered_campaign.csv"):
-            st.success("Filtered CSV downloaded.")
+    to_send = df[~df['email'].isin(already_sent) & ~df['email'].isin(failed_emails) & ~df['email'].isin(global_sent)]
+    batch = to_send.head(100)
 
-        new_campaign_name = st.text_input("New Campaign Name to Save Filtered List")
-        if st.button("💾 Save Filtered as Campaign") and new_campaign_name:
-            st.session_state.campaigns[new_campaign_name] = matched
-            save_campaign_data(new_campaign_name, matched)
-            st.success(f"Filtered contacts saved as '{new_campaign_name}' and ready for sending!")
+    new_log = []
+    for _, row in batch.iterrows():
+        email = row.get("email")
+        name = row.get("name", "there")
+        body_personalized = body.replace("{name}", name)
+        result = send_email(creds, email, subject, body_personalized, campaign_name)
 
-# --- Send Emails ---
-elif page == "✉️ Send Emails":
-    st.title("✉️ Send Emails")
-    if not st.session_state.campaigns:
-        st.warning("Upload a contact list first.")
-    else:
-        campaign = st.selectbox("Select Campaign to Send", list(st.session_state.campaigns))
-        creds = login_to_gmail()
-        subject = st.text_input("Subject")
-        body = st.text_area("Email Body (HTML supported)")
-        followup = st.checkbox("Enable Follow-Up After 10 Minutes")
-        auto_batch = st.checkbox("Auto-Schedule Emails by Gmail Daily Limit (100/day)")
-        send_button = st.button("🚀 Start Sending")
-
-        if send_button:
-            df = st.session_state.campaigns[campaign]
-            failed_log = []
-
-            def send_batch(start_index, sent_counter):
-                batch = df.iloc[start_index:start_index+100]
-                for _, row in batch.iterrows():
-                    email = row.get("email")
-                    name = row.get("name", "there")
-                    html_body = body.replace("{name}", name)
-                    result = send_email(creds, email, subject, html_body, campaign)
-                    if result.get("status") == "success":
-                        sent_counter["count"] += 1
-                    elif "error" in result:
-                        failed_log.append({"email": email, "error": result["error"]})
-                    st.write(f"{email} → {result.get('status') or result.get('error')}")
-
-            sent_counter = {"count": 0}
-            total = len(df)
-
-            if auto_batch or total > 1000:
-                start_idx = 0
-                while start_idx < total:
-                    send_batch(start_idx, sent_counter)
-                    start_idx += 100
-                    if start_idx < total:
-                        st.info(f"Batch complete: {start_idx}/{total} emails sent. Waiting until next day.")
-                        time.sleep(86400)
+        timestamp = datetime.now().isoformat()
+        if result.get("status") == "success":
+            new_log.append((email, "sent", timestamp))
+        elif "error" in result:
+            error_df = pd.DataFrame([[email, result['error'], timestamp]], columns=["email", "error", "timestamp"])
+            if os.path.exists(failed_path):
+                prev = pd.read_csv(failed_path)
+                pd.concat([prev, error_df]).drop_duplicates('email').to_csv(failed_path, index=False)
             else:
-                send_batch(0, sent_counter)
+                error_df.to_csv(failed_path, index=False)
 
-            st.success(f"✅ {sent_counter['count']} emails sent in '{campaign}'")
-            if failed_log:
-                st.error("Some emails failed to send:")
-                st.json(failed_log)
-                fail_df = pd.DataFrame(failed_log)
-                fail_df.to_csv(f"failed_{campaign}.csv", index=False)
-                st.download_button("⬇️ Download Failed Emails", fail_df.to_csv(index=False).encode(), file_name=f"failed_{campaign}.csv")
+        time.sleep(1)
 
-# --- Campaign Tracker ---
-elif page == "📈 Campaign Tracker":
-    st.title("📈 Campaign Dashboard")
-    if not st.session_state.campaigns:
-        st.info("No campaigns loaded.")
-    else:
-        for campaign, df in st.session_state.campaigns.items():
-            st.subheader(f"📦 {campaign}")
-            from connect_gmail import load_campaign_log
-            log = load_campaign_log(campaign)
-            st.metric("Contacts", len(df))
-            st.metric("Sent", len(log))
-            st.metric("Pending", len(df) - len(log))
-            st.progress(len(log) / len(df))
+    if new_log:
+        prev_log = log + new_log
+        with open(f"log_{campaign_name}.csv", "w") as f:
+            pd.DataFrame(prev_log, columns=["email", "status", "timestamp"]).to_csv(f, index=False)
+
+# ✅ Follow-Up Handler
+
+def schedule_follow_up_if_needed(campaign_name, creds, tone="Formal"):
+    df = load_campaign_data(campaign_name)
+    log = load_campaign_log(campaign_name)
+    sent_map = {row[0]: row[2] for row in log if row[1] == "sent"}  # email: timestamp
+
+    today = datetime.now()
+    for email, sent_date in sent_map.items():
+        sent_time = datetime.fromisoformat(sent_date)
+        if (today - sent_time).days >= FOLLOW_UP_DELAY_DAYS:
+            if not check_reply_status(creds, email):
+                follow_up_msg = REPLY_PROMPTS.get(tone, REPLY_PROMPTS["Formal"])
+                subject = f"Just Checking In"
+                send_email(creds, email, subject, follow_up_msg, campaign_name)
+                time.sleep(1)
