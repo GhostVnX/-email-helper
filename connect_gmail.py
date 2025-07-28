@@ -1,3 +1,15 @@
+import json
+import pickle
+import os
+import base64
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+from email.mime.text import MIMEText
+from googleapiclient.discovery import build
+import streamlit as st
+
+SCOPES = ['https://www.googleapis.com/auth/gmail.send']
+
 def login_to_gmail():
     creds = None
     if os.path.exists("token.pickle"):
@@ -31,3 +43,12 @@ def login_to_gmail():
             st.error(f"Error: {e}")
 
     st.stop()
+
+def send_email(creds, to, subject, message_text):
+    service = build("gmail", "v1", credentials=creds)
+    message = MIMEText(message_text, "html")
+    message["to"] = to
+    message["subject"] = subject
+    raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+    body = {"raw": raw}
+    return service.users().messages().send(userId="me", body=body).execute()
