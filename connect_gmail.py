@@ -12,7 +12,6 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 def login_to_gmail():
     creds = None
 
-    # Try to load saved token
     if os.path.exists("token.pickle"):
         with open("token.pickle", "rb") as token:
             creds = pickle.load(token)
@@ -21,7 +20,6 @@ def login_to_gmail():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            # Streamlit-compatible OAuth flow
             client_secret = {
                 "installed": {
                     "client_id": "19168390529-eou1nme0dfl22tgm4ikdlb2s6gvoodp6.apps.googleusercontent.com",
@@ -34,13 +32,14 @@ def login_to_gmail():
                 }
             }
 
+            # Run browserless OAuth for Streamlit
             flow = InstalledAppFlow.from_client_config(client_secret, SCOPES)
             auth_url, _ = flow.authorization_url(prompt='consent')
 
-            st.info("🔐 Step 1: Click the link below to authorize access")
-            st.markdown(f"[Authorize Gmail]({auth_url})")
+            st.info("🔐 Step 1: Click the link below to authorize Gmail access.")
+            st.markdown(f"[Click to Authorize]({auth_url})")
 
-            code = st.text_input("Step 2: Paste the authorization code here")
+            code = st.text_input("Step 2: Paste the authorization code here:")
 
             if code:
                 try:
@@ -48,15 +47,14 @@ def login_to_gmail():
                     creds = flow.credentials
                     with open("token.pickle", "wb") as token:
                         pickle.dump(creds, token)
-                    st.success("✅ Gmail authorized successfully!")
+                    st.success("✅ Gmail login successful!")
                 except Exception as e:
-                    st.error(f"Authorization failed: {e}")
+                    st.error(f"❌ Authorization failed: {e}")
                     return None
             else:
                 st.stop()
 
     return creds
-
 
 def send_email(creds, to, subject, message_text):
     service = build("gmail", "v1", credentials=creds)
@@ -64,5 +62,4 @@ def send_email(creds, to, subject, message_text):
     message["to"] = to
     message["subject"] = subject
     raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
-    send = service.users().messages().send(userId="me", body={"raw": raw}).execute()
-    return send
+    return service.users().messages().send(userId="me", body={"raw": raw}).execute()
