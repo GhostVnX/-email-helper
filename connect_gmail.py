@@ -13,17 +13,14 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 def login_to_gmail():
     creds = None
 
-    # Load token if it exists
     if os.path.exists("token.pickle"):
         with open("token.pickle", "rb") as token:
             creds = pickle.load(token)
 
-    # Authenticate if needed
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            # ✅ Your actual credentials
             client_secret = {
                 "installed": {
                     "client_id": "19168390529-eou1nme0dfl22tgm4ikdlb2s6gvoodp6.apps.googleusercontent.com",
@@ -39,21 +36,20 @@ def login_to_gmail():
             flow = InstalledAppFlow.from_client_config(client_secret, SCOPES)
             auth_url, _ = flow.authorization_url(prompt='consent')
 
-            st.warning("🔐 Copy the link below, open it in a new tab, authorize access, and paste the code below.")
-            st.code(auth_url, language="markdown")
+            st.warning("🔐 Please copy the link below, open it in your browser, sign in with your Gmail account, and paste the code below.")
+            st.code(auth_url)
             code = st.text_input("Paste the authorization code here:")
 
             if code:
                 try:
                     flow.fetch_token(code=code)
                     creds = flow.credentials
-
                     with open("token.pickle", "wb") as token:
                         pickle.dump(creds, token)
-                    st.success("✅ Gmail authentication successful!")
+                    st.success("✅ Gmail login successful!")
                 except Exception as e:
-                    st.error(f"Authentication failed: {e}")
-                    return None
+                    st.error(f"❌ Login failed: {e}")
+                    st.stop()
             else:
                 st.stop()
 
