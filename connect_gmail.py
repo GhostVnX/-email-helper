@@ -29,16 +29,22 @@ def login_to_gmail():
                     "token_uri": "https://oauth2.googleapis.com/token",
                     "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
                     "client_secret": "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",
-                    "redirect_uris": ["http://localhost"]
+                    "redirect_uris": ["https://kugqqnrx8v9tkcwpochazr.streamlit.app"]
                 }
             }
 
-            flow = InstalledAppFlow.from_client_config(client_secret, SCOPES)
-            auth_url, _ = flow.authorization_url(prompt='consent')
+            flow = InstalledAppFlow.from_client_config(
+                client_secret,
+                SCOPES,
+                redirect_uri="https://kugqqnrx8v9tkcwpochazr.streamlit.app"
+            )
 
-            st.warning("🔐 Please copy the link below, open it in your browser, sign in with your Gmail account, and paste the code below.")
+            auth_url, _ = flow.authorization_url(prompt='consent', include_granted_scopes='true')
+
+            st.warning("🔐 Step 1: Copy this link and open it in a new browser window to authorize.")
             st.code(auth_url)
-            code = st.text_input("Paste the authorization code here:")
+
+            code = st.text_input("Step 2: After authorizing, paste the code here:")
 
             if code:
                 try:
