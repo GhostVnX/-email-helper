@@ -12,15 +12,39 @@ import time
 
 st.set_page_config(page_title="📧 GhostBot Dashboard", layout="wide", initial_sidebar_state="expanded")
 
-# --- Dark Theme & CSS ---
+# --- Custom UI Style (Dark Mode + Card Layout) ---
 st.markdown("""
     <style>
-        .stApp { background-color: #111827; color: #e5e7eb; }
-        h1, h2, h3, h4 { color: #93c5fd; }
-        .sidebar .sidebar-content { background-color: #1f2937; }
-        .stButton>button { background-color: #2563eb; color: white; font-weight: bold; }
-        .stMetric-value { color: #60a5fa !important; }
-        .sticky-box { position: sticky; top: 0; background: #1f2937; padding: 1em; margin-bottom: 1em; border: 1px solid #374151; border-radius: 8px; }
+        body {
+            background-color: #0f1117;
+            color: white;
+        }
+        .reportview-container .main .block-container {
+            padding: 2rem;
+            background-color: #1c1e26;
+        }
+        .sticky-box {
+            background: #2a2d3e;
+            padding: 1rem;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            border-left: 4px solid #4ade80;
+        }
+        .metric-label {
+            color: #cbd5e1;
+            font-size: 0.8rem;
+        }
+        .stButton>button {
+            background-color: #4ade80;
+            color: #111827;
+            border-radius: 0.5rem;
+            font-weight: bold;
+        }
+        .stDownloadButton>button {
+            background-color: #60a5fa;
+            color: white;
+            font-weight: 600;
+        }
     </style>
 """, unsafe_allow_html=True)
 
