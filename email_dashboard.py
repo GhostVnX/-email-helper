@@ -3,7 +3,7 @@
 import streamlit as st
 import pandas as pd
 import os
-from connect_gmail import login_to_gmail, send_email, load_campaign_log, check_reply_status
+from connect_gmail import login_to_gmail, send_email, load_campaign_log
 from campaign_utils import split_batches, load_campaign_data, save_campaign_data
 from datetime import datetime, timedelta
 import threading
