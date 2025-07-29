@@ -48,6 +48,30 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# --- Logo Placement ---
+st.markdown("""
+<div class="logo-container">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Ghostscript_Tiger.svg/1200px-Ghostscript_Tiger.svg.png" alt="Logo">
+    <h1>GhostBot Campaign Dashboard</h1>
+</div>
+""", unsafe_allow_html=True)
+
+# --- Home Page ---
+page = st.sidebar.radio("📍 Navigate", ["🏠 Home", "📈 Campaign Tracker"])
+
+if page == "🏠 Home":
+    st.header("🏠 Welcome to GhostBot")
+    st.markdown("""
+    Welcome to **GhostBot**, your all-in-one email campaign assistant built for creators, marketers, and musicians.
+
+    🚀 Upload your contact lists
+    ✨ Personalize messages with prompts and smart templates
+    📬 Track replies, bounces, and opens
+    📊 Get campaign performance summaries and export analytics
+
+    👇 Use the sidebar to get started or jump into Campaign Tracker.
+    """)
+
 DASHBOARD_PASSWORD = "GhostAccess123"
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
