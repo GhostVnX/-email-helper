@@ -1,30 +1,5 @@
 # dashboard.py (Master UI - Unified Navigation & All Features)
-st.title("🎧 Playlist Curator Portal")
 
-auth_choice = st.sidebar.radio("Login / Signup", ["Login", "Sign up"])
-email = st.sidebar.text_input("Email")
-password = st.sidebar.text_input("Password", type="password")
-
-if auth_choice == "Sign up":
-    if st.sidebar.button("Create Account"):
-        try:
-            auth.create_user_with_email_and_password(email, password)
-            st.success("✅ Account created. You can now log in.")
-        except Exception as e:
-            st.error(f"❌ {str(e)}")
-
-elif auth_choice == "Login":
-    if st.sidebar.button("Login"):
-        try:
-            user = auth.sign_in_with_email_and_password(email, password)
-            st.session_state["user"] = user
-            st.success("✅ Logged in!")
-        except Exception as e:
-            st.error(f"❌ {str(e)}")
-
-# Stop here if not logged in
-if "user" not in st.session_state:
-    st.stop()
 import streamlit as st
 import pandas as pd
 if "campaigns" not in st.session_state:
