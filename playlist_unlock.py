@@ -4,47 +4,57 @@ import os
 
 CSV_FILE = "playlist_contacts_final.csv"
 
+# ✅ Load Data
 @st.cache_data
 def load_data():
     if os.path.exists(CSV_FILE):
         df = pd.read_csv(CSV_FILE)
+        df.columns = [col.strip().lower().replace(" ", "_") for col in df.columns]
         df.drop_duplicates(subset="email", inplace=True)
+
+        required_cols = ["playlist_name", "email", "followers", "genre", "curator", "social_link"]
+        for col in required_cols:
+            if col not in df.columns:
+                df[col] = None
         return df
     else:
         return pd.DataFrame(columns=["playlist_name", "email", "followers", "genre", "curator", "social_link"])
 
+# ✅ Save Data
 def save_data(df):
     df.to_csv(CSV_FILE, index=False)
 
-# ✅ This is the wrapper function
+# ✅ MAIN FUNCTION
 def run_playlist_unlock():
     st.set_page_config("🔓 Unlock Playlist Contacts", layout="wide")
     st.title("🔓 Unlock Playlist Contacts")
 
     df = load_data()
 
-@st.cache_data
-def load_data():
-    if os.path.exists(CSV_FILE):
-        df = pd.read_csv(CSV_FILE)
-        df.columns = [col.strip().lower().replace(" ", "_") for col in df.columns]  # Standardize
-        df.drop_duplicates(subset="email", inplace=True)
+    # --- Admin Upload Section ---
+    with st.expander("🔐 Admin: Upload New Playlist File"):
+        admin_pass = st.text_input("Enter admin password", type="password")
+        if admin_pass == "ghostadmin123":
+            uploaded_file = st.file_uploader("Upload New Playlist CSV", type=["csv"])
+            if uploaded_file:
+                try:
+                    new_df = pd.read_csv(uploaded_file)
+                    new_df.columns = [col.strip().lower().replace(" ", "_") for col in new_df.columns]
+                    combined = pd.concat([df, new_df], ignore_index=True)
+                    combined.drop_duplicates(subset="email", inplace=True)
+                    save_data(combined)
+                    st.success(f"✅ Merged and saved! New total: {len(combined)}")
+                    df = combined
+                except Exception as e:
+                    st.error(f"❌ Error: {e}")
 
-        # Ensure required columns exist (fill missing if needed)
-        required_cols = ["playlist_name", "email", "followers", "genre", "curator", "social_link"]
-        for col in required_cols:
-            if col not in df.columns:
-                df[col] = None  # fill missing columns
-
-        return df
-    else:
-        return pd.DataFrame(columns=["playlist_name", "email", "followers", "genre", "curator", "social_link"])
-
+    # --- Credit Tracking ---
     if "unlock_credits" not in st.session_state:
-        st.session_state.unlock_credits = 10  # daily credits
+        st.session_state.unlock_credits = 10  # Daily free unlocks
 
     st.markdown(f"🧮 **Credits Remaining Today:** `{st.session_state.unlock_credits}`")
 
+    # --- Filters ---
     col1, col2 = st.columns(2)
     with col1:
         genre_filter = st.selectbox("🎵 Filter by Genre", ["All"] + sorted(df["genre"].dropna().unique()))
@@ -62,10 +72,11 @@ def load_data():
     else:
         filtered = filtered.sort_values(by="followers", ascending=False)
 
+    # --- Display Playlists ---
     st.markdown("### 📋 Playlist Curators")
 
     for idx, row in filtered.iterrows():
-        cost = 2 if row["followers"] > 10000 else 1
+        cost = 2 if row["followers"] and row["followers"] > 10000 else 1
         col1, col2 = st.columns([5, 1])
         with col1:
             st.markdown(f"""
