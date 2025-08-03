@@ -22,6 +22,7 @@ def load_data():
                 df[col] = None
         df["genre"] = df["genre"].astype(str).str.strip().str.title()
         df["platform"] = df["platform"].astype(str).str.strip().str.title()
+        df["followers"] = pd.to_numeric(df["followers"], errors="coerce").fillna(0)
         return df
     else:
         return pd.DataFrame(columns=["playlist_name", "email", "followers", "genre", "curator", "social_link", "bio", "platform", "url"])
@@ -48,6 +49,9 @@ def run_playlist_unlock():
     🧮 **Credits Remaining Today:** `{}`  
     🔍 *Search thousands of playlists with contact details across major platforms. Filter and unlock now!*
     """.format(st.session_state.unlock_credits))
+
+    # Prioritize contacts with emails
+    df = df[df["email"].notna() & df["email"].str.contains("@")]
 
     col1, col2, col3 = st.columns(3)
     genre_options = sorted([g for g in df["genre"].dropna().unique() if g])
@@ -78,14 +82,14 @@ def run_playlist_unlock():
     unlocked_records = []
 
     for idx, row in filtered.iterrows():
-        cost = 2 if row["followers"] and row["followers"] > 10000 else 1
+        cost = 2 if row["followers"] > 10000 else 1
         section = colA if idx % 2 == 0 else colB
         with section:
             with st.container():
                 st.markdown(f"""
                 #### 🎧 {row['playlist_name'] or 'N/A'}
                 - 👤 **Curator**: {row.get('curator', 'N/A')}
-                - 📧 **Email**: {"🔒 Locked" if f"unlocked_{idx}" not in st.session_state else row['email']}
+                - 📧 **Email**: {'🔒 Locked' if f"unlocked_{idx}" not in st.session_state else row['email']}
                 - 🌐 **Followers**: {int(row['followers']) if pd.notna(row['followers']) else 'N/A'}
                 - 🏷️ **Genre**: {row.get('genre', 'N/A')}
                 - 💽 **Platform**: {row.get('platform', 'N/A')}
