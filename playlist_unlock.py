@@ -1,4 +1,4 @@
-# playlist_unlock.py (Optimized Playlist Unlock UI)
+# playlist_unlock.py
 
 import streamlit as st
 import pandas as pd
@@ -12,7 +12,8 @@ def load_data():
     if os.path.exists(CSV_FILE):
         df = pd.read_csv(CSV_FILE)
         df.columns = [col.strip().lower().replace(" ", "_") for col in df.columns]
-        df.drop_duplicates(subset="email", inplace=True)
+
+        # Ensure required columns exist
         required_cols = [
             "playlist_name", "email", "followers", "genre", "curator",
             "social_link", "bio", "platform", "url"
@@ -20,12 +21,20 @@ def load_data():
         for col in required_cols:
             if col not in df.columns:
                 df[col] = None
+
+        # Now it's safe to drop duplicates
+        df.drop_duplicates(subset="email", inplace=True)
+
+        # Clean and standardize data
         df["genre"] = df["genre"].astype(str).str.strip().str.title()
         df["platform"] = df["platform"].astype(str).str.strip().str.title()
         df["followers"] = pd.to_numeric(df["followers"], errors="coerce").fillna(0)
         return df
     else:
-        return pd.DataFrame(columns=["playlist_name", "email", "followers", "genre", "curator", "social_link", "bio", "platform", "url"])
+        return pd.DataFrame(columns=[
+            "playlist_name", "email", "followers", "genre", "curator",
+            "social_link", "bio", "platform", "url"
+        ])
 
 def save_data(df):
     df.to_csv(CSV_FILE, index=False)
@@ -36,21 +45,34 @@ def save_unlocked(df):
         df = pd.concat([existing, df], ignore_index=True).drop_duplicates(subset=["email"])
     df.to_csv(UNLOCK_LOG, index=False)
 
+# Optional: Placeholder function for email sending
+def send_email_to_curator(email, playlist_name):
+    # You'd replace this with real SMTP/email API logic
+    print(f"Sending email to {email} for playlist {playlist_name}...")
+
 def run_playlist_unlock():
     st.set_page_config("🔓 Unlock Playlist Contacts", layout="wide")
     st.title("🔓 Unlock Playlist Contacts")
 
     df = load_data()
 
+    # CSV upload option
+    uploaded_file = st.file_uploader("📤 Upload Your Own Playlist CSV", type=["csv"])
+    if uploaded_file:
+        user_df = pd.read_csv(uploaded_file)
+        user_df.columns = [col.strip().lower().replace(" ", "_") for col in user_df.columns]
+        st.success("✅ Uploaded successfully. Merging with main data.")
+        df = pd.concat([df, user_df], ignore_index=True)
+
     if "unlock_credits" not in st.session_state:
         st.session_state.unlock_credits = 10
 
-    st.markdown("""
-    🧮 **Credits Remaining Today:** `{}`  
+    st.markdown(f"""
+    🧮 **Credits Remaining Today:** `{st.session_state.unlock_credits}`  
     🔍 *Search thousands of playlists with contact details across major platforms. Filter and unlock now!*
-    """.format(st.session_state.unlock_credits))
+    """)
 
-    # Prioritize contacts with emails
+    # Prioritize contacts with valid emails
     df = df[df["email"].notna() & df["email"].str.contains("@")]
 
     col1, col2, col3 = st.columns(3)
@@ -121,3 +143,11 @@ def run_playlist_unlock():
         if st.button("📤 Use These in Email Bot"):
             st.session_state.selected_recipients = unlocked_df
             st.success("✅ Emails sent to email bot memory. You can now proceed to sending.")
+
+        if "selected_recipients" in st.session_state:
+            st.markdown("### 📧 Ready to Send Emails")
+            if st.button("Send Emails"):
+                for _, row in st.session_state.selected_recipients.iterrows():
+                    send_email_to_curator(row['email'], row['playlist_name'])  # Replace with real logic
+                st.success("✅ Emails sent!")
+
