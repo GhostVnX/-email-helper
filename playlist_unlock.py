@@ -1,6 +1,25 @@
 # playlist_unlock.py
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
 
-import streamlit as st
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyBfNziM4jdNxwHTeRn0OaQWMu1CWrY8yWM",
+  authDomain: "music-hub-8d767.firebaseapp.com",
+  projectId: "music-hub-8d767",
+  storageBucket: "music-hub-8d767.firebasestorage.app",
+  messagingSenderId: "476170016810",
+  appId: "1:476170016810:web:7b42875bc45fb76ec08b53",
+  measurementId: "G-YX0HSFNHVT"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);import streamlit as st
 import pandas as pd
 import os
 import re
