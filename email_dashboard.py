@@ -2,6 +2,8 @@
 
 import streamlit as st
 import pandas as pd
+if "campaigns" not in st.session_state:
+    st.session_state["campaigns"] = {}
 import os
 from connect_gmail import login_to_gmail, send_email, load_campaign_log, fetch_replies
 from campaign_utils import split_batches, load_campaign_data, save_campaign_data
