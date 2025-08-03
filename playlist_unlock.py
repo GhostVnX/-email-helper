@@ -20,15 +20,11 @@ def load_data():
         for col in required_cols:
             if col not in df.columns:
                 df[col] = None
-        # Normalize filter fields
         df["genre"] = df["genre"].astype(str).str.strip().str.title()
         df["platform"] = df["platform"].astype(str).str.strip().str.title()
         return df
     else:
-        return pd.DataFrame(columns=[
-            "playlist_name", "email", "followers", "genre", "curator",
-            "social_link", "bio", "platform", "url"
-        ])
+        return pd.DataFrame(columns=["playlist_name", "email", "followers", "genre", "curator", "social_link", "bio", "platform", "url"])
 
 def save_data(df):
     df.to_csv(CSV_FILE, index=False)
@@ -54,10 +50,13 @@ def run_playlist_unlock():
     """.format(st.session_state.unlock_credits))
 
     col1, col2, col3 = st.columns(3)
+    genre_options = sorted([g for g in df["genre"].dropna().unique() if g])
+    platform_options = sorted([p for p in df["platform"].dropna().unique() if p])
+
     with col1:
-        genre_filter = st.selectbox("🎵 Filter by Genre", ["All"] + sorted(df["genre"].dropna().unique()))
+        genre_filter = st.selectbox("🎵 Filter by Genre", ["All"] + genre_options)
     with col2:
-        platform_filter = st.selectbox("💽 Platform", ["All"] + sorted(df["platform"].dropna().unique()))
+        platform_filter = st.selectbox("💽 Filter by Platform", ["All"] + platform_options)
     with col3:
         sort_order = st.selectbox("⬇️ Sort by", ["Playlist Name", "Followers (Low → High)", "Followers (High → Low)"])
 
