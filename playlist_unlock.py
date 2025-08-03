@@ -4,6 +4,48 @@ import streamlit as st
 import pandas as pd
 import os
 import re
+import streamlit_authenticator as stauth
+import yaml
+from yaml.loader import SafeLoader
+
+# Simple login credentials
+auth_config = {
+    'credentials': {
+        'usernames': {
+            'admin': {
+                'email': 'admin@email.com',
+                'name': 'Admin',
+                'password': stauth.Hasher(['adminpass']).generate()[0],
+            },
+            'user1': {
+                'email': 'user1@email.com',
+                'name': 'User One',
+                'password': stauth.Hasher(['userpass']).generate()[0],
+            },
+        }
+    },
+    'cookie': {'name': 'auth', 'key': 'auth_key', 'expiry_days': 1},
+    'preauthorized': {}
+}
+
+# Authenticator
+authenticator = stauth.Authenticate(
+    auth_config['credentials'],
+    auth_config['cookie']['name'],
+    auth_config['cookie']['key'],
+    auth_config['cookie']['expiry_days']
+)
+
+name, auth_status, username = authenticator.login('Login', 'main')
+
+if auth_status is False:
+    st.error('❌ Incorrect username or password')
+    st.stop()
+elif auth_status is None:
+    st.warning('⚠️ Please enter your credentials')
+    st.stop()
+else:
+    st.sidebar.success(f'✅ Logged in as {name}')
 
 CSV_FILE = "Updated_Playlist_Data__with_extracted_emails_.csv"
 UNLOCK_LOG = "unlocked_contacts.csv"
@@ -139,3 +181,28 @@ def run_playlist_unlock():
         if st.button("📤 Use These in Email Bot"):
             st.session_state.selected_recipients = unlocked_df
             st.success("✅ Emails sent to email bot memory. You can now proceed to sending.")
+
+# --- Email sender (placeholder) ---
+def send_email(email, playlist_name):
+    # Replace with actual SMTP/Mailgun/SendGrid logic if needed
+    print(f"📧 Sending email to {email} about playlist {playlist_name}")
+
+
+# --- Admin CSV upload ---
+def admin_upload():
+    st.sidebar.markdown("### 🔧 Admin Upload (CSV Replace)")
+
+    if username != "admin":
+        st.sidebar.info("Only admins can upload to the database.")
+        return
+
+    uploaded_file = st.sidebar.file_uploader("📤 Upload New Playlist CSV", type=["csv"])
+    if uploaded_file:
+        df = pd.read_csv(uploaded_file)
+        df.to_csv(CSV_FILE, index=False)
+        st.sidebar.success("✅ Database updated successfully. Please refresh the app.")
+# Run admin uploader
+admin_upload()
+
+# Run the main app
+run_playlist_unlock()
