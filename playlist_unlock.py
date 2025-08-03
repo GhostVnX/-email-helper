@@ -5,7 +5,7 @@ import pandas as pd
 import os
 import re
 
-CSV_FILE = "Cleaned_Playlist_DB.csv"
+CSV_FILE = "Updated_Playlist_Data__with_extracted_emails_.csv"
 UNLOCK_LOG = "unlocked_contacts.csv"
 
 @st.cache_data
