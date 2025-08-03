@@ -11,3 +11,5 @@ openpyxl
 google-api-python-client
 pandas
 pyrebase4
+gcloud
+oauth2client
