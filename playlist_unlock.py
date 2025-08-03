@@ -2,52 +2,54 @@ import streamlit as st
 import pandas as pd
 import os
 import re
-import pyrebase
+import firebase_admin
+from firebase_admin import credentials, auth
+from google.cloud import firestore
+from streamlit.components.v1 import html
 
-# 🔐 Firebase config
-firebase_config = {
-    "apiKey": "AIzaSyBfNziM4jdNxwHTeRn0OaQWMu1CWrY8yWM",
-    "authDomain": "music-hub-8d767.firebaseapp.com",
-    "projectId": "music-hub-8d767",
-    "storageBucket": "music-hub-8d767.appspot.com",
-    "messagingSenderId": "476170016810",
-    "appId": "1:476170016810:web:7b42875bc45fb76ec08b53",
-    "databaseURL": ""
-}
+# --- 🔐 Firebase Admin SDK Setup ---
+if not firebase_admin._apps:
+    cred = credentials.Certificate("firebase_service_account.json")
+    firebase_admin.initialize_app(cred)
+    db = firestore.Client()
 
-firebase = pyrebase.initialize_app(firebase_config)
-auth = firebase.auth()
+# --- Google Sign-In via Firebase Hosted UI ---
+def render_google_login():
+    login_url = (
+        "https://music-hub-8d767.firebaseapp.com/__/auth/handler"
+        "?redirect_uri=https://share.streamlit.io"
+    )
+    html(
+        f"""
+        <a href="{login_url}" target="_self">
+            <button style="padding:0.5em 1em; font-size:16px;">Sign in with Google</button>
+        </a>
+        """,
+        height=60,
+    )
 
-# 🔐 Firebase login/signup UI
-st.sidebar.title("🔐 Login / Sign Up")
-auth_mode = st.sidebar.radio("Select", ["Login", "Sign up"])
-
+st.sidebar.title("🔐 Login")
 email = st.sidebar.text_input("Email")
 password = st.sidebar.text_input("Password", type="password")
+render_google_login()
 
-user = None
+if "user_email" not in st.session_state:
+    st.session_state.user_email = None
 
-if auth_mode == "Sign up":
-    if st.sidebar.button("Create Account"):
-        try:
-            auth.create_user_with_email_and_password(email, password)
-            st.sidebar.success("✅ Account created. Please log in.")
-        except Exception as e:
-            st.sidebar.error(f"❌ {str(e)}")
+if st.sidebar.button("Login"):
+    try:
+        user = auth.get_user_by_email(email)
+        st.session_state.user_email = email
+        st.sidebar.success(f"✅ Logged in as {email}")
+    except firebase_admin.auth.UserNotFoundError:
+        st.sidebar.error("❌ No such user found.")
+        st.stop()
 
-if auth_mode == "Login":
-    if st.sidebar.button("Login"):
-        try:
-            user = auth.sign_in_with_email_and_password(email, password)
-            st.session_state.user = user
-            st.sidebar.success(f"✅ Logged in as {email}")
-        except Exception as e:
-            st.sidebar.error(f"❌ {str(e)}")
-
-if "user" not in st.session_state:
+if not st.session_state.user_email:
+    st.warning("🔒 Please log in to access the app.")
     st.stop()
 
-user_email = st.session_state.user["email"]
+user_email = st.session_state.user_email
 is_admin = user_email == "admin@email.com"
 
 CSV_FILE = "Updated_Playlist_Data__with_extracted_emails_.csv"
@@ -58,7 +60,7 @@ def load_data():
     def extract_email(text):
         if pd.isna(text):
             return ""
-        match = re.search(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", str(text))
+        match = re.search(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+", str(text))
         return match.group(0) if match else ""
 
     if os.path.exists(CSV_FILE):
@@ -95,6 +97,10 @@ def save_unlocked(df):
         existing = pd.read_csv(UNLOCK_LOG)
         df = pd.concat([existing, df], ignore_index=True).drop_duplicates(subset=["email"])
     df.to_csv(UNLOCK_LOG, index=False)
+
+    # Save to Firestore
+    for _, row in df.iterrows():
+        db.collection("unlocks").document(user_email).collection("contacts").document(row['email']).set(row.to_dict())
 
 def run_playlist_unlock():
     st.set_page_config("🔓 Unlock Playlist Contacts", layout="wide")
@@ -177,11 +183,9 @@ def run_playlist_unlock():
             st.session_state.selected_recipients = unlocked_df
             st.success("✅ Emails sent to email bot memory. You can now proceed to sending.")
 
-# --- Email sender (placeholder) ---
 def send_email(email, playlist_name):
     print(f"📧 Sending email to {email} about playlist {playlist_name}")
 
-# --- Admin CSV upload ---
 def admin_upload():
     st.sidebar.markdown("### 🔧 Admin Upload")
     if not is_admin:
@@ -194,6 +198,5 @@ def admin_upload():
         df.to_csv(CSV_FILE, index=False)
         st.sidebar.success("✅ Playlist database updated. Please refresh.")
 
-# Run uploader and unlocker
 admin_upload()
 run_playlist_unlock()
