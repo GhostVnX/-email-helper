@@ -9,6 +9,7 @@ from connect_gmail import login_to_gmail, send_email, load_campaign_log, fetch_r
 from campaign_utils import split_batches, load_campaign_data, save_campaign_data
 from scraper_module import google_search, extract_emails
 from datetime import datetime
+from playlist_unlock import run_playlist_unlock
 import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="📧 GhostBot Dashboard", layout="wide", initial_sidebar_state="expanded")
@@ -141,14 +142,8 @@ elif nav == "📊 Email Tracker":
         st.metric("Failed", len(failed))
         st.progress(len(sent)/max(1, len(st.session_state.campaigns[name])))
 
-# --- Playlist Unlock ---
 elif nav == "🔓 Unlock Playlist Contacts":
-    st.header("🔓 Unlock Curator Contacts")
-    st.info("You have 10 unlock credits left today")
-    dummy = pd.DataFrame({"Curator": ["Blog A", "Blog B"], "Email": ["a@mail.com", "b@mail.com"]})
-    st.dataframe(dummy)
-    if st.button("🔓 Unlock One"):
-        st.success("Contact Unlocked!")
+    run_playlist_unlock()
 
 # --- Social Campaigns ---
 elif nav == "📣 Social Media Campaigns":
