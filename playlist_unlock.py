@@ -1,73 +1,57 @@
-# playlist_unlock.py
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyBfNziM4jdNxwHTeRn0OaQWMu1CWrY8yWM",
-  authDomain: "music-hub-8d767.firebaseapp.com",
-  projectId: "music-hub-8d767",
-  storageBucket: "music-hub-8d767.firebasestorage.app",
-  messagingSenderId: "476170016810",
-  appId: "1:476170016810:web:7b42875bc45fb76ec08b53",
-  measurementId: "G-YX0HSFNHVT"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);import streamlit as st
+import streamlit as st
 import pandas as pd
 import os
 import re
-import streamlit_authenticator as stauth
-import yaml
-from yaml.loader import SafeLoader
+import pyrebase
 
-# Simple login credentials
-auth_config = {
-    'credentials': {
-        'usernames': {
-            'admin': {
-                'email': 'admin@email.com',
-                'name': 'Admin',
-                'password': stauth.Hasher(['adminpass']).generate()[0],
-            },
-            'user1': {
-                'email': 'user1@email.com',
-                'name': 'User One',
-                'password': stauth.Hasher(['userpass']).generate()[0],
-            },
-        }
-    },
-    'cookie': {'name': 'auth', 'key': 'auth_key', 'expiry_days': 1},
-    'preauthorized': {}
+# 🔐 Firebase config
+firebase_config = {
+    "apiKey": "AIzaSyBfNziM4jdNxwHTeRn0OaQWMu1CWrY8yWM",
+    "authDomain": "music-hub-8d767.firebaseapp.com",
+    "projectId": "music-hub-8d767",
+    "storageBucket": "music-hub-8d767.appspot.com",
+    "messagingSenderId": "476170016810",
+    "appId": "1:476170016810:web:7b42875bc45fb76ec08b53",
+    "databaseURL": ""
 }
 
-# Authenticator
-authenticator = stauth.Authenticate(
-    auth_config['credentials'],
-    auth_config['cookie']['name'],
-    auth_config['cookie']['key'],
-    auth_config['cookie']['expiry_days']
-)
+firebase = pyrebase.initialize_app(firebase_config)
+auth = firebase.auth()
 
-name, auth_status, username = authenticator.login('Login', 'main')
+# 🔐 Firebase login/signup UI
+st.sidebar.title("🔐 Login / Sign Up")
+auth_mode = st.sidebar.radio("Select", ["Login", "Sign up"])
 
-if auth_status is False:
-    st.error('❌ Incorrect username or password')
+email = st.sidebar.text_input("Email")
+password = st.sidebar.text_input("Password", type="password")
+
+user = None
+
+if auth_mode == "Sign up":
+    if st.sidebar.button("Create Account"):
+        try:
+            auth.create_user_with_email_and_password(email, password)
+            st.sidebar.success("✅ Account created. Please log in.")
+        except Exception as e:
+            st.sidebar.error(f"❌ {str(e)}")
+
+if auth_mode == "Login":
+    if st.sidebar.button("Login"):
+        try:
+            user = auth.sign_in_with_email_and_password(email, password)
+            st.session_state.user = user
+            st.sidebar.success(f"✅ Logged in as {email}")
+        except Exception as e:
+            st.sidebar.error(f"❌ {str(e)}")
+
+if "user" not in st.session_state:
     st.stop()
-elif auth_status is None:
-    st.warning('⚠️ Please enter your credentials')
-    st.stop()
-else:
-    st.sidebar.success(f'✅ Logged in as {name}')
+
+user_email = st.session_state.user["email"]
+is_admin = user_email == "admin@email.com"
 
 CSV_FILE = "Updated_Playlist_Data__with_extracted_emails_.csv"
-UNLOCK_LOG = "unlocked_contacts.csv"
+UNLOCK_LOG = f"unlocked_{user_email.replace('@', '_at_')}.csv"
 
 @st.cache_data
 def load_data():
@@ -81,7 +65,6 @@ def load_data():
         df = pd.read_csv(CSV_FILE)
         df.columns = [col.strip().lower().replace(" ", "_") for col in df.columns]
 
-        # Ensure required columns
         required_cols = [
             "playlist_name", "email", "followers", "genre", "curator",
             "social_link", "bio", "platform", "url"
@@ -90,23 +73,16 @@ def load_data():
             if col not in df.columns:
                 df[col] = ""
 
-        # Clean and extract emails if missing
         df["email"] = df["email"].fillna("").astype(str)
         df["email"] = df.apply(
             lambda row: row["email"] if "@" in row["email"] else extract_email(row.get("curator", "")),
             axis=1
         )
-
-        # Keep only rows with valid emails
         df = df[df["email"].str.contains("@")]
-
-        # Normalize values
         df["genre"] = df["genre"].astype(str).str.strip().str.title()
         df["platform"] = df["platform"].astype(str).str.strip().str.title()
         df["followers"] = pd.to_numeric(df["followers"], errors="coerce").fillna(0)
-
         df.drop_duplicates(subset="email", inplace=True)
-
         return df
     else:
         return pd.DataFrame(columns=[
@@ -168,7 +144,7 @@ def run_playlist_unlock():
                 st.markdown(f"""
                 #### 🎧 {row['playlist_name'] or 'N/A'}
                 - 👤 **Curator**: {row.get('curator', 'N/A')}
-                - 📧 **Email**: {"🔒 Locked" if f"unlocked_{idx}" not in st.session_state else row['email']}
+                - 📧 **Email**: {'🔒 Locked' if f"unlocked_{idx}" not in st.session_state else row['email']}
                 - 🌐 **Followers**: {int(row['followers']) if pd.notna(row['followers']) else 'N/A'}
                 - 🏷️ **Genre**: {row.get('genre', 'N/A')}
                 - 💽 **Platform**: {row.get('platform', 'N/A')}
@@ -193,9 +169,9 @@ def run_playlist_unlock():
         save_unlocked(new_unlocked_df)
 
     if os.path.exists(UNLOCK_LOG):
-        st.markdown("### 📬 Export Unlocked Emails")
+        st.markdown("### 📬 Your Unlocked Emails")
         unlocked_df = pd.read_csv(UNLOCK_LOG)
-        st.download_button("📥 Download Unlocked Contacts", unlocked_df.to_csv(index=False), file_name="unlocked_contacts.csv")
+        st.download_button("📥 Download Your Contacts", unlocked_df.to_csv(index=False), file_name="my_unlocked_contacts.csv")
 
         if st.button("📤 Use These in Email Bot"):
             st.session_state.selected_recipients = unlocked_df
@@ -203,25 +179,21 @@ def run_playlist_unlock():
 
 # --- Email sender (placeholder) ---
 def send_email(email, playlist_name):
-    # Replace with actual SMTP/Mailgun/SendGrid logic if needed
     print(f"📧 Sending email to {email} about playlist {playlist_name}")
-
 
 # --- Admin CSV upload ---
 def admin_upload():
-    st.sidebar.markdown("### 🔧 Admin Upload (CSV Replace)")
-
-    if username != "admin":
-        st.sidebar.info("Only admins can upload to the database.")
+    st.sidebar.markdown("### 🔧 Admin Upload")
+    if not is_admin:
+        st.sidebar.info("Only admins can upload new playlists.")
         return
 
-    uploaded_file = st.sidebar.file_uploader("📤 Upload New Playlist CSV", type=["csv"])
+    uploaded_file = st.sidebar.file_uploader("📤 Upload Playlist CSV", type=["csv"])
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
         df.to_csv(CSV_FILE, index=False)
-        st.sidebar.success("✅ Database updated successfully. Please refresh the app.")
-# Run admin uploader
-admin_upload()
+        st.sidebar.success("✅ Playlist database updated. Please refresh.")
 
-# Run the main app
+# Run uploader and unlocker
+admin_upload()
 run_playlist_unlock()
