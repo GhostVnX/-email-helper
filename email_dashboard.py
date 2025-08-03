@@ -94,7 +94,7 @@ REPLY_PROMPTS = {
 # --- Home Page ---
 if page == "\U0001F3E0 Home":
     st.header("\U0001F3E0 Welcome to GhostBot")
- st.markdown("""
+st.markdown("""
 Welcome to **GhostBot**, your all-in-one email campaign assistant built for creators, marketers, and musicians.
 
 🚀 Upload your contact lists  
