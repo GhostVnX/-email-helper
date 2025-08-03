@@ -200,5 +200,6 @@ def admin_upload():
         df.to_csv(CSV_FILE, index=False)
         st.sidebar.success("✅ Playlist database updated. Please refresh.")
 
-admin_upload()
-run_playlist_unlock()
+if __name__ == "__main__":
+    admin_upload()
+    run_playlist_unlock()
