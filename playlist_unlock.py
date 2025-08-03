@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 import os
 
-CSV_FILE = "playlist_contacts_final.csv"
+CSV_FILE = "Cleaned_Playlist_Contact_Database.csv"
 
-# ✅ Load Data
+# --- Load Playlist Data ---
 @st.cache_data
 def load_data():
     if os.path.exists(CSV_FILE):
@@ -12,19 +12,26 @@ def load_data():
         df.columns = [col.strip().lower().replace(" ", "_") for col in df.columns]
         df.drop_duplicates(subset="email", inplace=True)
 
+        # Map inconsistent columns
+        if "contcat" in df.columns:
+            df.rename(columns={"contcat": "curator"}, inplace=True)
+        if "genres" in df.columns:
+            df.rename(columns={"genres": "genre"}, inplace=True)
+
         required_cols = ["playlist_name", "email", "followers", "genre", "curator", "social_link"]
         for col in required_cols:
             if col not in df.columns:
                 df[col] = None
+
         return df
     else:
         return pd.DataFrame(columns=["playlist_name", "email", "followers", "genre", "curator", "social_link"])
 
-# ✅ Save Data
+# --- Save Updated CSV ---
 def save_data(df):
     df.to_csv(CSV_FILE, index=False)
 
-# ✅ MAIN FUNCTION
+# --- Main App Function ---
 def run_playlist_unlock():
     st.set_page_config("🔓 Unlock Playlist Contacts", layout="wide")
     st.title("🔓 Unlock Playlist Contacts")
@@ -40,17 +47,23 @@ def run_playlist_unlock():
                 try:
                     new_df = pd.read_csv(uploaded_file)
                     new_df.columns = [col.strip().lower().replace(" ", "_") for col in new_df.columns]
+
+                    if "contcat" in new_df.columns:
+                        new_df.rename(columns={"contcat": "curator"}, inplace=True)
+                    if "genres" in new_df.columns:
+                        new_df.rename(columns={"genres": "genre"}, inplace=True)
+
                     combined = pd.concat([df, new_df], ignore_index=True)
                     combined.drop_duplicates(subset="email", inplace=True)
                     save_data(combined)
-                    st.success(f"✅ Merged and saved! New total: {len(combined)}")
+                    st.success(f"✅ Merged and saved! New total: {len(combined)} contacts")
                     df = combined
                 except Exception as e:
                     st.error(f"❌ Error: {e}")
 
-    # --- Credit Tracking ---
+    # --- Unlock Credit System ---
     if "unlock_credits" not in st.session_state:
-        st.session_state.unlock_credits = 10  # Daily free unlocks
+        st.session_state.unlock_credits = 10
 
     st.markdown(f"🧮 **Credits Remaining Today:** `{st.session_state.unlock_credits}`")
 
@@ -72,7 +85,7 @@ def run_playlist_unlock():
     else:
         filtered = filtered.sort_values(by="followers", ascending=False)
 
-    # --- Display Playlists ---
+    # --- Display Playlist Table ---
     st.markdown("### 📋 Playlist Curators")
 
     for idx, row in filtered.iterrows():
@@ -80,7 +93,7 @@ def run_playlist_unlock():
         col1, col2 = st.columns([5, 1])
         with col1:
             st.markdown(f"""
-            - **🎧 Playlist**: {row['playlist_name']}
+            - **🎧 Playlist**: {row.get('playlist_name', 'N/A')}
             - 👤 Curator: {row.get('curator', 'N/A')}
             - 📧 Email: {"🔒 Locked" if f"unlocked_{idx}" not in st.session_state else row['email']}
             - 🌐 Followers: {int(row['followers']) if pd.notna(row['followers']) else "N/A"}
