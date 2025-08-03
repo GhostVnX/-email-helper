@@ -23,25 +23,22 @@ def run_playlist_unlock():
 
     df = load_data()
 
-    # --- Admin Upload Section ---
-    with st.expander("🔐 Admin: Upload New Playlist File"):
-        admin_pass = st.text_input("Enter admin password", type="password")
-        if admin_pass == "ghostadmin123":
-            uploaded_file = st.file_uploader("Upload New Playlist CSV", type=["csv"])
-            if uploaded_file:
-                try:
-                    new_df = pd.read_csv(uploaded_file)
-                    required = {"playlist_name", "email", "followers", "genre", "curator"}
-                    if not required.issubset(set(new_df.columns)):
-                        st.error(f"File must include columns: {required}")
-                    else:
-                        combined = pd.concat([df, new_df], ignore_index=True)
-                        combined.drop_duplicates(subset="email", inplace=True)
-                        save_data(combined)
-                        st.success(f"✅ Merged and saved! New total: {len(combined)}")
-                        df = combined
-                except Exception as e:
-                    st.error(f"❌ Error: {e}")
+@st.cache_data
+def load_data():
+    if os.path.exists(CSV_FILE):
+        df = pd.read_csv(CSV_FILE)
+        df.columns = [col.strip().lower().replace(" ", "_") for col in df.columns]  # Standardize
+        df.drop_duplicates(subset="email", inplace=True)
+
+        # Ensure required columns exist (fill missing if needed)
+        required_cols = ["playlist_name", "email", "followers", "genre", "curator", "social_link"]
+        for col in required_cols:
+            if col not in df.columns:
+                df[col] = None  # fill missing columns
+
+        return df
+    else:
+        return pd.DataFrame(columns=["playlist_name", "email", "followers", "genre", "curator", "social_link"])
 
     if "unlock_credits" not in st.session_state:
         st.session_state.unlock_credits = 10  # daily credits
