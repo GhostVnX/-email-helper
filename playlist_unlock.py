@@ -8,8 +8,12 @@ from google.cloud import firestore
 from streamlit.components.v1 import html
 
 # --- 🔐 Firebase Admin SDK Setup ---
+import json
+
 if not firebase_admin._apps:
-    cred = credentials.Certificate("firebase_service_account.json")
+    firebase_creds = st.secrets["gmail_service"]  # Load from existing secret key
+    service_account_info = json.loads(json.dumps(firebase_creds))  # convert TOML to dict
+    cred = credentials.Certificate(service_account_info)
     firebase_admin.initialize_app(cred)
     db = firestore.Client()
 
