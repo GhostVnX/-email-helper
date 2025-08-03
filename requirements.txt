@@ -8,3 +8,5 @@ google-api-python-client
 email-validator
 python-dotenv
 openpyxl
+google-api-python-client
+pandas
