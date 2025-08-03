@@ -1,5 +1,7 @@
 streamlit
 pandas
+firebase-admin
+google-cloud-firestore
 matplotlib
 google-auth
 google-auth-oauthlib
@@ -8,7 +10,3 @@ google-api-python-client
 email-validator
 python-dotenv
 openpyxl
-google-api-python-client
-pyrebase4
-google-cloud-storage
-oauth2client
