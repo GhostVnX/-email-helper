@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 import os
 
+# File paths
 CSV_FILE = "Cleaned_Playlist_DB.csv"
 UNLOCK_LOG = "unlocked_contacts.csv"
 
@@ -11,9 +12,11 @@ UNLOCK_LOG = "unlocked_contacts.csv"
 def load_data():
     if os.path.exists(CSV_FILE):
         df = pd.read_csv(CSV_FILE)
+
+        # Normalize column names
         df.columns = [col.strip().lower().replace(" ", "_") for col in df.columns]
 
-        # Ensure required columns exist
+        # Ensure required columns
         required_cols = [
             "playlist_name", "email", "followers", "genre", "curator",
             "social_link", "bio", "platform", "url"
@@ -22,13 +25,15 @@ def load_data():
             if col not in df.columns:
                 df[col] = None
 
-        # Now it's safe to drop duplicates
-        df.drop_duplicates(subset="email", inplace=True)
+        # Drop duplicates safely
+        if "email" in df.columns:
+            df.drop_duplicates(subset="email", inplace=True)
 
-        # Clean and standardize data
-        df["genre"] = df["genre"].astype(str).str.strip().str.title()
-        df["platform"] = df["platform"].astype(str).str.strip().str.title()
+        # Fill and clean
+        df["genre"] = df["genre"].fillna("Unknown").astype(str).str.strip().str.title()
+        df["platform"] = df["platform"].fillna("Unknown").astype(str).str.strip().str.title()
         df["followers"] = pd.to_numeric(df["followers"], errors="coerce").fillna(0)
+
         return df
     else:
         return pd.DataFrame(columns=[
@@ -45,10 +50,10 @@ def save_unlocked(df):
         df = pd.concat([existing, df], ignore_index=True).drop_duplicates(subset=["email"])
     df.to_csv(UNLOCK_LOG, index=False)
 
-# Optional: Placeholder function for email sending
+# Placeholder for email sending function
 def send_email_to_curator(email, playlist_name):
-    # You'd replace this with real SMTP/email API logic
-    print(f"Sending email to {email} for playlist {playlist_name}...")
+    print(f"Sending email to {email} for playlist: {playlist_name}")
+    # Replace with SMTP or API-based email logic
 
 def run_playlist_unlock():
     st.set_page_config("🔓 Unlock Playlist Contacts", layout="wide")
@@ -56,13 +61,22 @@ def run_playlist_unlock():
 
     df = load_data()
 
-    # CSV upload option
+    # Allow file upload
     uploaded_file = st.file_uploader("📤 Upload Your Own Playlist CSV", type=["csv"])
     if uploaded_file:
-        user_df = pd.read_csv(uploaded_file)
-        user_df.columns = [col.strip().lower().replace(" ", "_") for col in user_df.columns]
-        st.success("✅ Uploaded successfully. Merging with main data.")
-        df = pd.concat([df, user_df], ignore_index=True)
+        try:
+            user_df = pd.read_csv(uploaded_file)
+            user_df.columns = [col.strip().lower().replace(" ", "_") for col in user_df.columns]
+            df = pd.concat([df, user_df], ignore_index=True)
+            st.success("✅ Uploaded successfully. Merged with existing data.")
+        except Exception as e:
+            st.error(f"❌ Failed to process uploaded file: {e}")
+
+    # Show debug info
+    st.markdown("### 🧪 Debug: Data Preview")
+    st.write("Data shape:", df.shape)
+    st.write("Columns:", df.columns.tolist())
+    st.dataframe(df.head(10))
 
     if "unlock_credits" not in st.session_state:
         st.session_state.unlock_credits = 10
@@ -72,13 +86,13 @@ def run_playlist_unlock():
     🔍 *Search thousands of playlists with contact details across major platforms. Filter and unlock now!*
     """)
 
-    # Prioritize contacts with valid emails
     df = df[df["email"].notna() & df["email"].str.contains("@")]
 
-    col1, col2, col3 = st.columns(3)
-    genre_options = sorted([g for g in df["genre"].dropna().unique() if g])
-    platform_options = sorted([p for p in df["platform"].dropna().unique() if p])
+    # Safely extract filters
+    genre_options = sorted(df["genre"].dropna().unique()) if "genre" in df.columns else []
+    platform_options = sorted(df["platform"].dropna().unique()) if "platform" in df.columns else []
 
+    col1, col2, col3 = st.columns(3)
     with col1:
         genre_filter = st.selectbox("🎵 Filter by Genre", ["All"] + genre_options)
     with col2:
@@ -86,12 +100,14 @@ def run_playlist_unlock():
     with col3:
         sort_order = st.selectbox("⬇️ Sort by", ["Playlist Name", "Followers (Low → High)", "Followers (High → Low)"])
 
+    # Apply filters
     filtered = df.copy()
     if genre_filter != "All":
         filtered = filtered[filtered["genre"] == genre_filter]
     if platform_filter != "All":
         filtered = filtered[filtered["platform"] == platform_filter]
 
+    # Apply sorting
     if sort_order == "Playlist Name":
         filtered = filtered.sort_values(by="playlist_name")
     elif sort_order == "Followers (Low → High)":
@@ -131,10 +147,12 @@ def run_playlist_unlock():
                 else:
                     st.success("✅ Unlocked")
 
+    # Save unlocked contacts
     if unlocked_records:
         new_unlocked_df = pd.DataFrame(unlocked_records)
         save_unlocked(new_unlocked_df)
 
+    # Export and send section
     if os.path.exists(UNLOCK_LOG):
         st.markdown("### 📬 Export Unlocked Emails")
         unlocked_df = pd.read_csv(UNLOCK_LOG)
@@ -148,6 +166,5 @@ def run_playlist_unlock():
             st.markdown("### 📧 Ready to Send Emails")
             if st.button("Send Emails"):
                 for _, row in st.session_state.selected_recipients.iterrows():
-                    send_email_to_curator(row['email'], row['playlist_name'])  # Replace with real logic
+                    send_email_to_curator(row['email'], row['playlist_name'])
                 st.success("✅ Emails sent!")
-
