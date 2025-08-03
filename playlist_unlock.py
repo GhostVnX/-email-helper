@@ -20,9 +20,15 @@ def load_data():
         for col in required_cols:
             if col not in df.columns:
                 df[col] = None
+        # Normalize filter fields
+        df["genre"] = df["genre"].astype(str).str.strip().str.title()
+        df["platform"] = df["platform"].astype(str).str.strip().str.title()
         return df
     else:
-        return pd.DataFrame(columns=["playlist_name", "email", "followers", "genre", "curator", "social_link", "bio", "platform", "url"])
+        return pd.DataFrame(columns=[
+            "playlist_name", "email", "followers", "genre", "curator",
+            "social_link", "bio", "platform", "url"
+        ])
 
 def save_data(df):
     df.to_csv(CSV_FILE, index=False)
@@ -32,7 +38,6 @@ def save_unlocked(df):
         existing = pd.read_csv(UNLOCK_LOG)
         df = pd.concat([existing, df], ignore_index=True).drop_duplicates(subset=["email"])
     df.to_csv(UNLOCK_LOG, index=False)
-
 
 def run_playlist_unlock():
     st.set_page_config("🔓 Unlock Playlist Contacts", layout="wide")
@@ -84,6 +89,7 @@ def run_playlist_unlock():
                 - 📧 **Email**: {"🔒 Locked" if f"unlocked_{idx}" not in st.session_state else row['email']}
                 - 🌐 **Followers**: {int(row['followers']) if pd.notna(row['followers']) else 'N/A'}
                 - 🏷️ **Genre**: {row.get('genre', 'N/A')}
+                - 💽 **Platform**: {row.get('platform', 'N/A')}
                 - 🔗 **Social**: {row.get('social_link', 'N/A')}
                 - 🔗 **URL**: {row.get('url', 'N/A')}
                 - 📝 **Bio**: {row.get('bio', 'N/A')}
