@@ -3,29 +3,48 @@
 import streamlit as st
 import pandas as pd
 import os
+import re
 
 CSV_FILE = "Cleaned_Playlist_DB.csv"
 UNLOCK_LOG = "unlocked_contacts.csv"
 
 @st.cache_data
 def load_data():
+    def extract_email(text):
+        if pd.isna(text):
+            return ""
+        match = re.search(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", str(text))
+        return match.group(0) if match else ""
+
     if os.path.exists(CSV_FILE):
         df = pd.read_csv(CSV_FILE)
         df.columns = [col.strip().lower().replace(" ", "_") for col in df.columns]
 
-        # Required fields
+        # Ensure required columns
         required_cols = [
             "playlist_name", "email", "followers", "genre", "curator",
             "social_link", "bio", "platform", "url"
         ]
         for col in required_cols:
             if col not in df.columns:
-                df[col] = None
+                df[col] = ""
+
+        # Clean and extract emails if missing
+        df["email"] = df["email"].fillna("").astype(str)
+        df["email"] = df.apply(
+            lambda row: row["email"] if "@" in row["email"] else extract_email(row.get("curator", "")),
+            axis=1
+        )
+
+        # Keep only rows with valid emails
+        df = df[df["email"].str.contains("@")]
+
+        # Normalize values
+        df["genre"] = df["genre"].astype(str).str.strip().str.title()
+        df["platform"] = df["platform"].astype(str).str.strip().str.title()
+        df["followers"] = pd.to_numeric(df["followers"], errors="coerce").fillna(0)
 
         df.drop_duplicates(subset="email", inplace=True)
-        df["genre"] = df["genre"].fillna("Unknown").astype(str).str.strip().str.title()
-        df["platform"] = df["platform"].fillna("Spotify").astype(str).str.strip().str.title()
-        df["followers"] = pd.to_numeric(df["followers"], errors="coerce").fillna(0)
 
         return df
     else:
@@ -40,9 +59,6 @@ def save_unlocked(df):
         df = pd.concat([existing, df], ignore_index=True).drop_duplicates(subset=["email"])
     df.to_csv(UNLOCK_LOG, index=False)
 
-def send_email_to_curator(email, playlist_name):
-    print(f"Sending email to {email} for playlist: {playlist_name}")
-
 def run_playlist_unlock():
     st.set_page_config("🔓 Unlock Playlist Contacts", layout="wide")
     st.title("🔓 Unlock Playlist Contacts")
@@ -54,31 +70,23 @@ def run_playlist_unlock():
 
     st.markdown(f"""
     🧮 **Credits Remaining Today:** `{st.session_state.unlock_credits}`  
-    🔍 *Filter and unlock playlists across platforms. Only genre and followers are visible until unlocked.*
+    🔍 *Search thousands of playlists with contact details across major platforms. Filter and unlock now!*
     """)
-
-    # Filter valid emails only
-    df = df[df["email"].notna() & df["email"].str.contains("@")]
-
-    genre_options = sorted(df["genre"].dropna().unique())
-    platform_options = sorted(df["platform"].dropna().unique())
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        genre_filter = st.selectbox("🎵 Filter by Genre", ["All"] + genre_options)
+        genre_filter = st.selectbox("🎵 Filter by Genre", ["All"] + sorted(df["genre"].dropna().unique()))
     with col2:
-        platform_filter = st.selectbox("💽 Filter by Platform", ["All"] + platform_options)
+        platform_filter = st.selectbox("💽 Platform", ["All"] + sorted(df["platform"].dropna().unique()))
     with col3:
-        sort_order = st.selectbox("⬇️ Sort by", ["Followers (High → Low)", "Followers (Low → High)", "Playlist Name"])
+        sort_order = st.selectbox("⬇️ Sort by", ["Playlist Name", "Followers (Low → High)", "Followers (High → Low)"])
 
-    # Apply filters
     filtered = df.copy()
     if genre_filter != "All":
         filtered = filtered[filtered["genre"] == genre_filter]
     if platform_filter != "All":
         filtered = filtered[filtered["platform"] == platform_filter]
 
-    # Apply sorting
     if sort_order == "Playlist Name":
         filtered = filtered.sort_values(by="playlist_name")
     elif sort_order == "Followers (Low → High)":
@@ -91,53 +99,43 @@ def run_playlist_unlock():
     unlocked_records = []
 
     for idx, row in filtered.iterrows():
-        cost = 2 if row["followers"] > 10000 else 1
+        cost = 2 if row["followers"] and row["followers"] > 10000 else 1
         section = colA if idx % 2 == 0 else colB
 
         with section:
             with st.container():
                 st.markdown(f"""
-                #### 🎵 *{row.get('genre', 'Unknown')}*  
-                - 👥 **Followers**: {int(row['followers']) if pd.notna(row['followers']) else 'N/A'}
+                #### 🎧 {row['playlist_name'] or 'N/A'}
+                - 👤 **Curator**: {row.get('curator', 'N/A')}
+                - 📧 **Email**: {"🔒 Locked" if f"unlocked_{idx}" not in st.session_state else row['email']}
+                - 🌐 **Followers**: {int(row['followers']) if pd.notna(row['followers']) else 'N/A'}
+                - 🏷️ **Genre**: {row.get('genre', 'N/A')}
+                - 💽 **Platform**: {row.get('platform', 'N/A')}
+                - 🔗 **Social**: {row.get('social_link', 'N/A')}
+                - 🔗 **URL**: {row.get('url', 'N/A')}
+                - 📝 **Bio**: {row.get('bio', 'N/A')}
                 """)
-                
-                # If unlocked, show more
-                if f"unlocked_{idx}" in st.session_state:
-                    st.markdown(f"""
-                    - 🎧 **Playlist Name**: {row.get('playlist_name', 'N/A')}
-                    - 👤 **Curator**: {row.get('curator', 'N/A')}
-                    - 📧 **Email**: {row.get('email', 'N/A')}
-                    - 🔗 **URL**: {row.get('url', 'N/A')}
-                    - 📝 **Description**: {row.get('bio', 'N/A')}
-                    - 🌐 **Social**: {row.get('social_link', 'N/A')}
-                    """)
-                    st.success("✅ Unlocked")
-                else:
+
+                if f"unlocked_{idx}" not in st.session_state:
                     if st.session_state.unlock_credits >= cost:
-                        if st.button(f"🔓 Unlock (-{cost})", key=f"unlock_{idx}"):
+                        if st.button(f"Unlock (-{cost})", key=f"unlock_{idx}"):
                             st.session_state[f"unlocked_{idx}"] = True
                             st.session_state.unlock_credits -= cost
                             unlocked_records.append(row)
                     else:
-                        st.button("Out of credits", disabled=True, key=f"disabled_{idx}")
+                        st.button("Out of credits", disabled=True, key=f"no_credit_{idx}")
+                else:
+                    st.success("✅ Unlocked")
 
-    # Save newly unlocked contacts
     if unlocked_records:
         new_unlocked_df = pd.DataFrame(unlocked_records)
         save_unlocked(new_unlocked_df)
 
-    # Export / send unlocked
     if os.path.exists(UNLOCK_LOG):
+        st.markdown("### 📬 Export Unlocked Emails")
         unlocked_df = pd.read_csv(UNLOCK_LOG)
-        st.markdown("### 📬 Export / Use Unlocked Contacts")
-        st.download_button("📥 Download as CSV", unlocked_df.to_csv(index=False), file_name="unlocked_contacts.csv")
+        st.download_button("📥 Download Unlocked Contacts", unlocked_df.to_csv(index=False), file_name="unlocked_contacts.csv")
 
-        if st.button("📤 Send to Email Bot"):
+        if st.button("📤 Use These in Email Bot"):
             st.session_state.selected_recipients = unlocked_df
-            st.success("✅ Unlocked emails saved to email bot memory")
-
-        if "selected_recipients" in st.session_state:
-            if st.button("Send Emails Now"):
-                for _, row in st.session_state.selected_recipients.iterrows():
-                    send_email_to_curator(row["email"], row["playlist_name"])
-                st.success("✅ Emails sent!")
+            st.success("✅ Emails sent to email bot memory. You can now proceed to sending.")
