@@ -1,56 +1,65 @@
+# playlist_unlock.py
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta
 
-# --- Load Playlist Data ---
+st.set_page_config(page_title="🔓 Unlock Playlists", layout="wide")
+
+# --- Load Playlist Contact File ---
 @st.cache_data
-def load_playlist_data():
-    df = pd.read_csv("playlist_contacts.csv")
-    df["Points Required"] = df["followers"].apply(lambda x: 2 if x >= 10000 else 1)
-    return df
 
-# --- Initialize Session States ---
-if "unlock_points" not in st.session_state:
-    st.session_state.unlock_points = 10
-if "unlocked_emails" not in st.session_state:
-    st.session_state.unlocked_emails = []
-if "last_reset" not in st.session_state:
-    st.session_state.last_reset = datetime.now()
+def load_data():
+    return pd.read_csv("playlist_contacts_final.csv")
 
-# --- Daily Reset Logic ---
-if datetime.now() - st.session_state.last_reset > timedelta(days=1):
-    st.session_state.unlock_points = 10
-    st.session_state.unlocked_emails = []
-    st.session_state.last_reset = datetime.now()
+playlist_df = load_data()
 
+# --- UI Header ---
 st.title("🔓 Unlock Playlist Contacts")
+st.markdown("""
+Welcome to your vault of high-quality playlist curator contacts. 
+Use your daily credits to unlock new leads!
+""")
 
-df = load_playlist_data()
+# --- Credit Management ---
+if "credits" not in st.session_state:
+    st.session_state.credits = 10
 
-# --- Sorting Controls ---
-st.markdown(f"### You have **{st.session_state.unlock_points}** credits")
-sort_by = st.selectbox("Sort by", ["followers (high → low)", "genre", "name"])
-if sort_by == "followers (high → low)":
-    df = df.sort_values(by="followers", ascending=False)
-elif sort_by == "genre":
-    df = df.sort_values(by="genre")
-elif sort_by == "name":
-    df = df.sort_values(by="name")
+st.info(f"💳 You have {st.session_state.credits} credits left today")
 
-# --- Show Playlists ---
-for i, row in df.iterrows():
-    with st.expander(f"{row['name']} - {row['followers']} followers"):
-        st.write(f"🎵 Genre: {row['genre']}")
-        st.write(f"🔗 Playlist: {row['playlist_url']}")
-        st.write(f"📧 Email: {'🔒 Locked' if row['email'] not in st.session_state.unlocked_emails else row['email']}")
-        st.write(f"💳 Requires: {row['Points Required']} points")
+# --- Filters ---
+col1, col2, col3 = st.columns(3)
+with col1:
+    genre = st.selectbox("🎧 Filter by Genre", ["All"] + sorted(playlist_df["genre"].dropna().unique()))
+with col2:
+    has_social = st.selectbox("📱 With Social Links?", ["All", "Yes", "No"])
+with col3:
+    sort_type = st.selectbox("⬇️ Sort By", ["Followers High to Low", "Followers Low to High"])
 
-        if row['email'] not in st.session_state.unlocked_emails:
-            if st.button(f"🔓 Unlock {row['name']}", key=f"unlock_{i}"):
-                if st.session_state.unlock_points >= row['Points Required']:
-                    st.session_state.unlock_points -= row['Points Required']
-                    st.session_state.unlocked_emails.append(row['email'])
-                    st.success(f"Unlocked {row['email']}!")
-                    st.rerun()
-                else:
-                    st.error("Not enough points to unlock.")
+filtered = playlist_df.copy()
+
+if genre != "All":
+    filtered = filtered[filtered["genre"] == genre]
+
+if has_social == "Yes":
+    filtered = filtered[filtered["instagram"].notna() | filtered["twitter"].notna()]
+elif has_social == "No":
+    filtered = filtered[filtered["instagram"].isna() & filtered["twitter"].isna()]
+
+if sort_type == "Followers High to Low":
+    filtered = filtered.sort_values("followers", ascending=False)
+else:
+    filtered = filtered.sort_values("followers")
+
+# --- Display Table ---
+st.dataframe(filtered[["playlist_name", "email", "followers", "genre", "instagram", "twitter", "unlock_cost"]].reset_index(drop=True))
+
+# --- Unlock Feature ---
+idx_to_unlock = st.number_input("🔢 Enter row number to unlock", min_value=0, max_value=len(filtered)-1, step=1)
+
+if st.button("🔓 Unlock Selected Contact"):
+    contact = filtered.iloc[idx_to_unlock]
+    cost = contact["unlock_cost"]
+    if st.session_state.credits >= cost:
+        st.session_state.credits -= cost
+        st.success(f"Unlocked {contact['playlist_name']} ({contact['email']})")
+    else:
+        st.error("Not enough credits!")
