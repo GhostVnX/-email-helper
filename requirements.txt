@@ -9,7 +9,6 @@ email-validator
 python-dotenv
 openpyxl
 google-api-python-client
-pandas
 pyrebase4
-gcloud
+google-cloud-storage
 oauth2client
