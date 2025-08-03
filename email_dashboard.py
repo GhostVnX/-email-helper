@@ -94,8 +94,14 @@ REPLY_PROMPTS = {
 # --- Home Page ---
 if page == "\U0001F3E0 Home":
     st.header("\U0001F3E0 Welcome to GhostBot")
-    st.markdown("""Welcome to **GhostBot**, your all-in-one email campaign assistant...")
+ st.markdown("""
+Welcome to **GhostBot**, your all-in-one email campaign assistant built for creators, marketers, and musicians.
 
+🚀 Upload your contact lists  
+✨ Personalize messages with smart prompts  
+📬 Track replies, bounces, and opens  
+📊 Get campaign performance summaries  
+""")
 # --- Upload Contacts ---
 elif page == "\U0001F4C4 Upload Contacts":
     st.header("\U0001F4C4 Upload Contact File")
