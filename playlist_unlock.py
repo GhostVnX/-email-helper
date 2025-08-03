@@ -3,6 +3,12 @@ import streamlit as st
 import pandas as pd
 
 st.set_page_config(page_title="🔓 Unlock Playlists", layout="wide")
+if st.sidebar.checkbox("⚙️ Admin Upload Mode"):
+    upload = st.file_uploader("Upload new playlist CSV", type=["csv"])
+    if upload:
+        with open("playlist_contacts_final.csv", "wb") as f:
+            f.write(upload.read())
+        st.success("✅ Playlist database updated!")
 
 # --- Load Playlist Contact File ---
 @st.cache_data
