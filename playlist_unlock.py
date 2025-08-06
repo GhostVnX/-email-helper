@@ -2,15 +2,15 @@ import streamlit as st
 import pandas as pd
 import os
 import re
-import firebase_admin
-from firebase_admin import credentials, auth
 from google.cloud import firestore
 from streamlit.components.v1 import html
 import json
+import firebase_admin
+from firebase_admin import credentials, auth
 
 # --- 🔐 Firebase Admin SDK Setup ---
 if not firebase_admin._apps:
-    firebase_creds = dict(st.secrets["gmail_service"])  # ✅ Properly cast from SecretValue
+    firebase_creds = json.loads(st.secrets["firebase_credentials"])
     cred = credentials.Certificate(firebase_creds)
     firebase_admin.initialize_app(cred)
     db = firestore.Client()
@@ -40,11 +40,18 @@ if "user_email" not in st.session_state:
 
 if st.sidebar.button("Login"):
     try:
-        user = auth.get_user_by_email(email)
-        st.session_state.user_email = email
-        st.sidebar.success(f"✅ Logged in as {email}")
+        if email:
+            user = auth.get_user_by_email(email)
+            st.session_state.user_email = email
+            st.sidebar.success(f"✅ Logged in as {email}")
+        else:
+            st.sidebar.error("❌ Please enter an email.")
+            st.stop()
     except firebase_admin.auth.UserNotFoundError:
         st.sidebar.error("❌ No such user found.")
+        st.stop()
+    except Exception as e:
+        st.sidebar.error(f"❌ Login error: {e}")
         st.stop()
 
 if not st.session_state.user_email:
@@ -100,7 +107,6 @@ def save_unlocked(df):
         df = pd.concat([existing, df], ignore_index=True).drop_duplicates(subset=["email"])
     df.to_csv(UNLOCK_LOG, index=False)
 
-    # Save to Firestore
     for _, row in df.iterrows():
         db.collection("unlocks").document(user_email).collection("contacts").document(row['email']).set(row.to_dict())
 
