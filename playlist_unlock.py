@@ -3,55 +3,22 @@ import pandas as pd
 import os
 import re
 from google.cloud import firestore
-from streamlit.components.v1 import html
 import json
-import firebase_admin
-from firebase_admin import credentials, auth
 
-# --- 🔐 Firebase Admin SDK Setup ---
-if not firebase_admin._apps:
-    firebase_creds = json.loads(st.secrets["firebase_credentials"])
-    cred = credentials.Certificate(firebase_creds)
-    firebase_admin.initialize_app(cred)
-    db = firestore.Client()
-
-# --- Google Sign-In via Firebase Hosted UI ---
-def render_google_login():
-    login_url = (
-        "https://music-hub-8d767.firebaseapp.com/__/auth/handler"
-        "?redirect_uri=https://share.streamlit.io"
-    )
-    html(
-        f"""
-        <a href="{login_url}" target="_self">
-            <button style="padding:0.5em 1em; font-size:16px;">Sign in with Google</button>
-        </a>
-        """,
-        height=60,
-    )
-
+# --- 🔐 Temporary Simple Login ---
 st.sidebar.title("🔐 Login")
 email = st.sidebar.text_input("Email")
 password = st.sidebar.text_input("Password", type="password")
-render_google_login()
 
 if "user_email" not in st.session_state:
     st.session_state.user_email = None
 
 if st.sidebar.button("Login"):
-    try:
-        if email:
-            user = auth.get_user_by_email(email)
-            st.session_state.user_email = email
-            st.sidebar.success(f"✅ Logged in as {email}")
-        else:
-            st.sidebar.error("❌ Please enter an email.")
-            st.stop()
-    except firebase_admin.auth.UserNotFoundError:
-        st.sidebar.error("❌ No such user found.")
-        st.stop()
-    except Exception as e:
-        st.sidebar.error(f"❌ Login error: {e}")
+    if email == "ghost@example.com" and password == "Ghost123":
+        st.session_state.user_email = email
+        st.sidebar.success("✅ Logged in successfully")
+    else:
+        st.sidebar.error("❌ Invalid credentials")
         st.stop()
 
 if not st.session_state.user_email:
@@ -106,9 +73,6 @@ def save_unlocked(df):
         existing = pd.read_csv(UNLOCK_LOG)
         df = pd.concat([existing, df], ignore_index=True).drop_duplicates(subset=["email"])
     df.to_csv(UNLOCK_LOG, index=False)
-
-    for _, row in df.iterrows():
-        db.collection("unlocks").document(user_email).collection("contacts").document(row['email']).set(row.to_dict())
 
 def run_playlist_unlock():
     st.set_page_config("🔓 Unlock Playlist Contacts", layout="wide")
